@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.WatchMail" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      圆形表盘主题：
+      - 纯黑背景：OLED 手表省电，且圆形遮罩外区域不产生可见差异
+      - windowSwipeToDismiss=false：关闭系统右滑退出，改用应用内右滑切换页面
+    -->
+    <style name="Theme.WearMail" parent="@android:style/Theme.DeviceDefault">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowSwipeToDismiss">false</item>
+        <item name="android:colorBackground">@android:color/black</item>
+    </style>
 </resources>

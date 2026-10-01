@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 466 466" width="466" height="466" role="img" aria-label="收件箱纵向预算示意：顶部 56dp 筛选、中部 123dp 信息流、底部 54dp 主按钮">
+  <title>WearMail 收件箱纵向预算（466×466 圆屏，density 2.0 → 233dp）</title>
+  <desc>按 docs/UI_SPEC.md 的几何绘制，非真机截图</desc>
+
+  <defs>
+    <linearGradient id="topFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000" stop-opacity="1"/>
+      <stop offset="70%" stop-color="#000000" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="35%" stop-color="#000000" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 屏幕圆 + 安全区 -->
+  <circle cx="233" cy="233" r="232" fill="#050505" stroke="#3a3a3a" stroke-width="2"/>
+  <circle cx="233" cy="233" r="210" fill="none" stroke="#4caf7d" stroke-opacity="0.55" stroke-width="1.5" stroke-dasharray="6 7"/>
+
+  <!-- 顶部固定带 56dp = 112px -->
+  <rect x="0" y="0" width="466" height="112" fill="url(#topFade)"/>
+  <!-- 迷你筛选胶囊 24dp = 48px -->
+  <g>
+    <rect x="80" y="52" width="118" height="48" rx="24" fill="#2b6ef2"/>
+    <text x="139" y="82" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="20" fill="#ffffff" text-anchor="middle">全部</text>
+    <rect x="206" y="52" width="92" height="48" rx="24" fill="#2a2a2e"/>
+    <text x="252" y="82" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="20" fill="#d6d6d6" text-anchor="middle">工作</text>
+    <rect x="306" y="52" width="92" height="48" rx="24" fill="#2a2a2e"/>
+    <text x="352" y="82" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="20" fill="#d6d6d6" text-anchor="middle">个人</text>
+  </g>
+  <text x="233" y="34" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17" fill="#8ea0b5" text-anchor="middle">顶部 56dp · 筛选胶囊 24dp</text>
+
+  <!-- 中部信息流 123dp = 246px -->
+  <g>
+    <!-- 三行邮件（宽度按该 Y 处的弦长收窄） -->
+    <g>
+      <rect x="86" y="126" width="294" height="68" rx="18" fill="#15161a"/>
+      <circle cx="116" cy="160" r="10" fill="#f2b134"/>
+      <rect x="138" y="142" width="120" height="12" rx="6" fill="#c9ccd3"/>
+      <rect x="138" y="164" width="200" height="10" rx="5" fill="#6f7681"/>
+      <circle cx="362" cy="146" r="7" fill="#4caf7d"/>
+    </g>
+    <g>
+      <rect x="80" y="202" width="306" height="68" rx="18" fill="#101114"/>
+      <circle cx="110" cy="236" r="10" fill="#2b6ef2"/>
+      <rect x="132" y="218" width="150" height="12" rx="6" fill="#c9ccd3"/>
+      <rect x="132" y="240" width="180" height="10" rx="5" fill="#6f7681"/>
+    </g>
+    <g>
+      <rect x="86" y="278" width="294" height="68" rx="18" fill="#0d0e11"/>
+      <circle cx="116" cy="312" r="10" fill="#e05d5d"/>
+      <rect x="138" y="294" width="132" height="12" rx="6" fill="#a9aeb7"/>
+      <rect x="138" y="316" width="168" height="10" rx="5" fill="#5f6672"/>
+    </g>
+  </g>
+  <text x="233" y="243" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17" fill="#7f8ea3" text-anchor="middle" opacity="0">　</text>
+
+  <!-- 底部固定带 54dp = 108px -->
+  <rect x="0" y="358" width="466" height="108" fill="url(#bottomFade)"/>
+  <!-- 迷你主按钮 24dp = 48px -->
+  <rect x="148" y="400" width="176" height="48" rx="24" fill="#2b6ef2"/>
+  <g fill="#ffffff">
+    <path d="M180 412 h13 v3 h-13z M184.5 407.5 h4 v12 h-4z" opacity="0.95"/>
+  </g>
+  <text x="266" y="431" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="20" fill="#ffffff" text-anchor="middle">新建邮件</text>
+  <text x="233" y="380" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17" fill="#8ea0b5" text-anchor="middle">底部 54dp · 主按钮 24dp（常规按钮的一半）</text>
+
+  <!-- 右侧标注 -->
+  <text x="452" y="240" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="16" fill="#4caf7d" text-anchor="end" transform="rotate(90 452 240)">信息流 123dp ≈ 3 行</text>
+  <text x="14" y="452" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="14" fill="#5c6773">安全区 r=210px</text>
+</svg>

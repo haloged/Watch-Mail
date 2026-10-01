@@ -1,15 +1,46 @@
+# ============================================================================
+# WearMail .gitignore
+# 原则：**只提交源码与文档**；构建产物、缓存、证书、本机路径一律不入库。
+# ============================================================================
+
+# ---------- 构建产物（每次构建都变，不要上传）----------
+build/
+app/build/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# ---------- Gradle / 构建缓存（数百 MB）----------
+.gradle/
+.kotlin/
+.gradlehome/
+.gradle-dist/
+
+# ---------- 本机环境与临时目录（不入库）----------
+local.properties          # 含本机 Android SDK 绝对路径
+.androidhome/             # Android 用户目录
+.tmp/                     # 构建与脚本临时目录
+.refsrc/                  # 解压的依赖源码（仅供编写 Compose 时查签名）
+
+# ---------- 签名证书：绝不入库 ----------
+# 构建脚本已改为「证书缺失也能构建」：无证书时 debug 用 AGP 默认调试证书，
+# release 产出未签名包。需要签名时用 -Pwearmail.storeFile=... 指定。
+keystore/
+*.jks
+*.keystore
+
+# ---------- 交付/验证产物 ----------
+# APK 与测试报告属于「可再生产物」：建议用 GitHub Releases / CI artifacts 分发，
+# 而不是提交进仓库（否则每次构建都产生无意义 diff）。
+# 若确实想提交某一份作为证据，用 git add -f 强制添加，例如：
+#   git add -f dist/reports/test-summary.txt
+dist/
+
+# ---------- IDE / 系统文件 ----------
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+Thumbs.db

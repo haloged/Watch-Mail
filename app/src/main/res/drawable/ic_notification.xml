@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  通知栏小图标。
+  必须是纯白单色（系统会按通知样式着色），且不能带背景。
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
-    android:viewportHeight="24"
-    android:tint="#FFFFFF">
-    
-    <!-- 邮件图标 -->
+    android:viewportHeight="24">
     <path
-        android:fillColor="@android:color/white"
-        android:pathData="M20,4H4C2.9,4 2.01,4.9 2.01,6L2,18C2,19.1 2.9,20 4,20H20C21.1,20 22,19.1 22,18V6C22,4.9 21.1,4 20,4ZM20,8L12,13L4,8V6L12,11L20,6V8Z"/>
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,5 L21,5 L21,19 L3,19 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M3.5,6 L12,13 L20.5,6"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2" />
 </vector>

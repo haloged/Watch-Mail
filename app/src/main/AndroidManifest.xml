@@ -1,53 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<!--
+  应用清单：Wear OS 独立应用
+  - uses-feature type.watch：声明仅面向手表
+  - standalone=true：无需手机端配套应用即可独立运行
+  - windowSwipeToDismiss=false（见 themes.xml）：禁用系统「右滑退出」，
+    避免与「右滑进入设置」的应用内手势冲突
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 网络权限 -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    
-    <!-- 前台服务权限 -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    
-    <!-- 通知权限 -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    
-    <!-- 振动权限 -->
-    <uses-permission android:name="android.permission.VIBRATE" />
-    
-    <!-- 保持唤醒权限 -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- Wear OS 声明：标识本应用为手表应用，保证手表商店可被正确识别与分发 -->
-    <uses-feature android:name="android.hardware.type.watch" />
+    <!-- 手表专属：应用只应安装在 Wear 设备上 -->
     <uses-feature
-        android:name="android.hardware.touchscreen"
+        android:name="android.hardware.type.watch"
+        android:required="true" />
+
+    <!-- 表冠（旋转输入）为可选硬件，缺失时应用仍可正常使用 -->
+    <uses-feature
+        android:name="android.hardware.rotaryencoder.lowres"
         android:required="false" />
 
+    <!-- 网络：IMAP / SMTP 收发邮件 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 局域网扫码配对：需要读取 Wi-Fi 状态以获取本机 IP -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- 新邮件振动提醒 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Android 13+ 通知运行时权限 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- WorkManager 后台同步在极端情况下需要唤醒锁 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <application
-        android:name=".WatchMailApplication"
-        android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
+        android:name=".core.WearMailApp"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.WatchMail"
-        tools:targetApi="31">
+        android:theme="@style/Theme.WearMail"
+        android:usesCleartextTraffic="true">
+        <!--
+          usesCleartextTraffic=true 仅用于手机扫码配置页面（局域网内 HTTP）。
+          邮件协议本身始终走 SSL/TLS 加密通道，不依赖该开关。
+        -->
 
-        <!-- 声明为独立手表应用（不依赖手机端） -->
+        <!-- 声明可选的 Wear 共享库；缺失时不影响独立运行 -->
+        <uses-library
+            android:name="com.google.android.wearable"
+            android:required="false" />
+
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="true" />
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:exported="true"
             android:label="@string/app_name"
-            android:launchMode="singleTask"
-            android:theme="@style/Theme.WatchMail"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.WearMail"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
