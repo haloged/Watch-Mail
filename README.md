@@ -29,7 +29,7 @@
 
 ## 亮点
 
-| | |
+
 |---|---|
 | 🧮 **圆屏几何当作数学问题** | 安全半径 210px、逐项按 Y 坐标计算弦长收窄列表项、**纵向预算**被写成静态检查：信息流可视带 < 100dp 或按钮热区 < 48px 会直接让 CI 失败 |
 | 📱 **手机扫码配置账户** | 手表起一个一次性 token 的局域网 HTTP 服务并显示二维码 → 手机扫码填表 → 凭据经 Keystore 加密落盘。手表上打字体验太差，这是最省事的路径 |
@@ -104,6 +104,8 @@ Windows 下把 `./gradlew` 换成 `gradlew.bat`。
 > 多数服务商需要先在网页端开启 IMAP/SMTP 并生成**应用专用密码/授权码**（QQ、163、Gmail 均如此）。
 
 ## 配置 Outlook（OAuth2）
+
+**Release版本已配置**
 
 微软已对 Exchange Online / Outlook.com **停用 IMAP/SMTP 基础认证**，所以 Outlook 账户只能走 OAuth2。
 本项目已完整实现设备码流与令牌续期，但**客户端 ID 需要你自己注册**（没人能替你注册）：
@@ -199,9 +201,7 @@ docs/          TECHNICAL.md · ARCHITECTURE.md · UI_SPEC.md · TESTING.md
 5. `release` 构建开启 R8，keep 规则已覆盖 JavaMail 的反射用法，但未做真机回归。
 
 ## 许可证
-
-**尚未选择许可证** —— 在法律上等同于「保留所有权利」。若要公开分发，请先添加 `LICENSE`
-（例如 MIT / Apache-2.0）并在此处替换本段说明。
+MIT
 
 ## 免责声明
 
