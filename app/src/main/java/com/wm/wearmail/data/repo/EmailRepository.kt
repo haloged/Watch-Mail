@@ -1,5 +1,6 @@
 package com.wm.wearmail.data.repo
 
+import com.wm.wearmail.data.db.HtmlCacheState
 import com.wm.wearmail.model.EmailMeta
 import kotlinx.coroutines.flow.Flow
 
@@ -45,8 +46,37 @@ interface EmailRepository {
     /** 读取已缓存正文（未缓存返回 null） */
     suspend fun cachedBody(emailId: Long): String?
 
-    /** 写入正文缓存 */
-    suspend fun cacheBody(emailId: Long, text: String)
+    /**
+     * 读取已缓存的**原始 HTML**（未缓存 / 未开启 HTML 渲染返回 null）。
+     *
+     * 与 [cachedBody] 分开读：只显示纯文本时不必把几百 KB 的 HTML 读进内存。
+     * 注意 null 无法区分「没问过服务器」与「问过但没有」，判断缓存完整性请用 [cachedHtmlState]。
+     */
+    suspend fun cachedHtml(emailId: Long): String?
+
+    /**
+     * 读取 HTML 缓存的三态（见 [HtmlCacheState]）。
+     *
+     * **不要**用 `cachedHtml(emailId) != null` 判断「缓存是否完整」：纯文本邮件本来
+     * 就没有可渲染的 HTML，会被误判为不完整而反复重下正文，永远无法离线打开。
+     * [HtmlCacheState.resolved] 才是「已有结论」。
+     */
+    suspend fun cachedHtmlState(emailId: Long): HtmlCacheState
+
+    /**
+     * 写入正文缓存。
+     *
+     * @param html 原始 HTML；null 表示本次没拿到，由 [htmlRequested] 区分「没问过」
+     *   （下次可补取）与「问过但没有」（不再重下），见 [HtmlCacheState]。
+     * @param htmlRequested 本次是否确实向服务器请求了 HTML（即用户开启了 HTML 渲染）；
+     *   为 true 且 [html] 为 null 时记下「这封邮件没有可渲染的 HTML」。
+     */
+    suspend fun cacheBody(
+        emailId: Long,
+        text: String,
+        html: String? = null,
+        htmlRequested: Boolean = false,
+    )
 
     suspend fun setRead(emailId: Long, read: Boolean)
 

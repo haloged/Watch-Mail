@@ -4,6 +4,7 @@ import com.wm.wearmail.core.Logs
 import com.wm.wearmail.data.crypto.CryptoManager
 import com.wm.wearmail.data.db.AccountDao
 import com.wm.wearmail.data.db.MailDatabase
+import com.wm.wearmail.data.db.SecretWrite
 import com.wm.wearmail.model.Account
 import com.wm.wearmail.model.AccountSecrets
 import com.wm.wearmail.model.OAuthTokens
@@ -64,15 +65,48 @@ class AccountRepositoryImpl(
     }
 
     override suspend fun update(account: Account, secrets: AccountSecrets?): Boolean = withContext(Dispatchers.IO) {
-        // secrets == null 表示「不改动凭据」：向 DAO 传 null 密文即可保留原密文列
-        val passwordEnc = secrets?.let { crypto.encryptNullable(it.password) }
-        val tokenEnc = secrets?.let { crypto.encryptNullable(it.oauth?.serialize()) }
-        val ok = accountDao.update(account, passwordEnc, tokenEnc)
+        // secrets == null 表示「不改动凭据」：此时两列都传 Keep，DAO 完全不写密文列。
+        // 注意不能传 null 表示「不改动」—— ContentValues 里的 null 就是「写成 SQL NULL」，
+        // 早期实现因此让「只改别名」清空了凭据（见 SecretWrite 的说明）。
+        val updateSecrets = secrets != null
+        val ok = accountDao.update(
+            account,
+            SecretWrite.of(updateSecrets, secrets?.let { crypto.encryptNullable(it.password) }),
+            SecretWrite.of(updateSecrets, secrets?.let { crypto.encryptNullable(it.oauth?.serialize()) }),
+        )
         if (ok) {
             refresh()
-            Logs.i(TAG, "账户已更新（id=${account.id}，凭据${if (secrets == null) "未改动" else "已更新"}）")
+            Logs.i(TAG, "账户已更新（id=${account.id}，凭据${if (updateSecrets) "已更新" else "未改动"}）")
         } else {
             Logs.w(TAG, "账户更新失败：记录不存在（id=${account.id}）")
+        }
+        ok
+    }
+
+    override suspend fun updateOAuthTokens(accountId: Long, tokens: OAuthTokens): Boolean = withContext(Dispatchers.IO) {
+        val account = accountDao.queryById(accountId)
+        if (account == null) {
+            Logs.w(TAG, "令牌写回失败：账户不存在（id=$accountId）")
+            return@withContext false
+        }
+        // 加密在写库前完成；结果为空（理论不可达）时直接放弃写入，
+        // 绝不能把「加密失败」变成「清空令牌列」
+        val encrypted = crypto.encryptNullable(tokens.serialize())
+        if (encrypted == null) {
+            Logs.w(TAG, "令牌加密结果为空，已放弃写回（id=$accountId）")
+            return@withContext false
+        }
+        // 密码列传 Keep：令牌刷新不得动其它凭据
+        val ok = accountDao.update(
+            account,
+            SecretWrite.Keep,
+            SecretWrite.Set(encrypted),
+        )
+        if (ok) {
+            refresh()
+            Logs.i(TAG, "OAuth2 令牌已写回（id=$accountId，密码列未改动）")
+        } else {
+            Logs.w(TAG, "令牌写回失败：记录不存在（id=$accountId）")
         }
         ok
     }

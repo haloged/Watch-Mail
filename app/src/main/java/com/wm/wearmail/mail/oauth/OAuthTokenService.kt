@@ -65,7 +65,18 @@ class OAuthTokenService(
         if (account.authType != AuthType.OAUTH2) return Result.success(secrets)
 
         val tokens = secrets.oauth
-            ?: return Result.failure(MailError.Auth("该账户尚未完成 OAuth2 授权，请在手表上重新授权"))
+        if (tokens == null) {
+            // 手机扫码配置只支持「粘贴已有令牌」，这类账户的令牌存在密码列里
+            // （见 PairingController），没有任何自动刷新能力。只要值非空就按原样使用 ——
+            // 否则这类账户会在同步开始前就被判为「未授权」，一次邮件都收不到。
+            return if (secrets.password.isNotBlank()) {
+                // 每次同步都会走到这里，用 debug 级别避免刷屏
+                Logs.d(TAG, "账户 ${account.id} 使用手动粘贴的 OAuth2 令牌（无自动刷新）")
+                Result.success(secrets)
+            } else {
+                Result.failure(MailError.Auth("该账户尚未完成 OAuth2 授权，请在手表上重新授权"))
+            }
+        }
 
         if (!tokens.needsRefresh()) return Result.success(secrets)
 
@@ -97,9 +108,10 @@ class OAuthTokenService(
 
         return oauth.refresh(refreshToken, configuredClientId(), currentTenant()).fold(
             onSuccess = { fresh ->
-                // 写回加密存储：下次启动/下次同步直接可用
+                // 写回加密存储：下次启动/下次同步直接可用。
+                // 只走「只写令牌列」的接口，避免顺手清空密码列（那是不可恢复的凭据丢失）。
                 val ok = runCatching {
-                    accounts.update(account, AccountSecrets(oauth = fresh))
+                    accounts.updateOAuthTokens(account.id, fresh)
                 }.getOrDefault(false)
                 if (!ok) {
                     Logs.w(TAG, "刷新后的令牌写回失败（账户 id=${account.id}），本次仍按新令牌继续")
@@ -147,7 +159,7 @@ class OAuthTokenService(
 
         /** 未配置客户端 ID 时的提示（UI 直接展示，因此写成完整可执行的指引） */
         const val MSG_NO_CLIENT_ID: String =
-            "尚未配置 Microsoft OAuth2 客户端 ID：请在「设置 → Outlook OAuth2」中填写，或在 gradle.properties 里设置 wearmail.microsoftOAuthClientId"
+            "尚未配置 Microsoft OAuth2 客户端 ID：请在「设置 → Outlook OAuth2」页中填写，或在 gradle.properties 里设置 wearmail.microsoftOAuthClientId"
     }
 }
 

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
@@ -24,8 +23,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.wear.compose.material3.Button
-import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.SwitchButton
@@ -44,14 +41,7 @@ import com.wm.wearmail.ui.kit.PrimaryActionButton
 import com.wm.wearmail.ui.kit.SectionHeader
 import com.wm.wearmail.ui.kit.SecondaryActionButton
 import com.wm.wearmail.ui.kit.WearIcons
-import com.wm.wearmail.ui.kit.WearTextField
 import com.wm.wearmail.ui.kit.rememberHaptics
-
-/**
- * 文本框的最小高度：需求要求触控热区不小于 48x48dp，
- * 而 [WearTextField] 按内容高度测量（约 36dp），因此调用处统一补高度下限。
- */
-private val SETTINGS_FIELD_MIN_HEIGHT = 48.dp
 
 /**
  * 设置页（一级页面，位于横向分页的第一页 —— 主界面右滑进入）。
@@ -59,12 +49,16 @@ private val SETTINGS_FIELD_MIN_HEIGHT = 48.dp
  * 分组：同步 / 通知 / Outlook OAuth2 / 存储 / 关于。
  * 全部操作都写回 [com.wm.wearmail.data.prefs.SettingsStore]，并在需要时
  * 联动后台任务（同步频率 → WorkManager）与账户表（账户级通知开关）。
+ *
+ * Outlook OAuth2 的输入框已独立到子页面（[OAuth2ConfigScreen]），本页只保留
+ * 入口按钮；「关于」分组提供手动「检查更新」（启动时也会自动检查一次）。
  */
 @Composable
 fun SettingsScreen(
     container: AppContainer,
     active: Boolean,
     rotaryBus: RotaryBus,
+    onOpenOAuth2Config: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(container))
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -290,46 +284,72 @@ fun SettingsScreen(
             // ---------------- Outlook OAuth2 ----------------
             // Outlook 已停用 IMAP/SMTP 基础认证，必须用 OAuth2；客户端 ID 需要用户
             // 自己在 Azure 门户注册应用后填入（设备码流不需要客户端密码）。
+            // 客户端 ID / 租户是低频一次性配置，输入框已独立到子页面
+            // （OAuth2ConfigScreen），这里只保留一个入口按钮。
             settingsSlot(index++, listState) { modifier ->
                 SectionHeader(text = "Outlook OAuth2", modifier = modifier)
             }
 
-            settingsSlot(index++, listState, key = "ms-oauth-fields") { modifier ->
-                Column(modifier = modifier.fillMaxWidth()) {
-                    WearTextField(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = SETTINGS_FIELD_MIN_HEIGHT),
-                        value = state.settings.microsoftOAuthClientId,
-                        onValueChange = vm::setMicrosoftClientId,
-                        placeholder = "客户端 ID（Application ID）",
-                        singleLine = true,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    WearTextField(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = SETTINGS_FIELD_MIN_HEIGHT),
-                        value = state.settings.microsoftOAuthTenant,
-                        onValueChange = vm::setMicrosoftTenant,
-                        placeholder = "租户（默认 common）",
-                        singleLine = true,
+            settingsSlot(index++, listState) { modifier ->
+                Column(
+                    modifier = modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    SecondaryActionButton(
+                        text = "OAuth2 客户端 ID 配置",
+                        icon = WearIcons.Settings,
+                        onClick = {
+                            haptics.tick()
+                            onOpenOAuth2Config()
+                        },
                     )
                 }
             }
 
+            // ---------------- 邮件正文 ----------------
+            // HTML 渲染**默认关闭**：需要 WebView（内存明显高于纯文本），且缓存里会多存一份
+            // 原始 HTML。只在性能足够、用户确实需要看排版的设备上开启。
+            settingsSlot(index++, listState) { modifier ->
+                SectionHeader(text = "邮件正文", modifier = modifier)
+            }
+
+            settingsSlot(index++, listState) { modifier ->
+                SwitchButton(
+                    checked = state.settings.htmlRenderingEnabled,
+                    onCheckedChange = { vm.setHtmlRendering(it) },
+                    modifier = modifier.fillMaxWidth(),
+                    secondaryLabel = { Text(text = "更耗内存与存储", maxLines = 1) },
+                    label = { Text(text = "渲染 HTML 邮件", maxLines = 1) },
+                )
+            }
+
             settingsSlot(index++, listState) { modifier ->
                 Text(
-                    text = "在 Azure 门户「应用注册」新建应用：账户类型选「任何组织目录中的账户和" +
-                        "个人 Microsoft 账户」，并在「身份验证」里启用「允许公共客户端流」；" +
-                        "把「应用程序(客户端) ID」填到上面。公共客户端 + 设备码流不需要客户端密码。",
+                    text = if (state.settings.htmlRenderingEnabled) {
+                        "邮件详情里可切换「HTML / 纯文本」；已缓存的纯文本会因缺少 HTML 而重新下载一次。"
+                    } else {
+                        "关闭时正文为剥离后的纯文本（最省内存与存储）；HTML 邮件也能照常阅读。"
+                    },
                     modifier = modifier.fillMaxWidth(),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    maxLines = 8,
+                    maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+
+            // 仅当 HTML 渲染开启时才出现：远程图片常被当作追踪像素，默认屏蔽
+            if (state.settings.htmlRenderingEnabled) {
+                settingsSlot(index++, listState) { modifier ->
+                    SwitchButton(
+                        checked = state.settings.remoteImagesEnabled,
+                        onCheckedChange = { vm.setRemoteImages(it) },
+                        modifier = modifier.fillMaxWidth(),
+                        secondaryLabel = { Text(text = "可能被用于追踪已读", maxLines = 1) },
+                        label = { Text(text = "显示远程图片", maxLines = 1) },
+                    )
+                }
             }
 
             // ---------------- 存储 ----------------
@@ -381,6 +401,19 @@ fun SettingsScreen(
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     InfoLine(text = "版本 ${BuildConfig.VERSION_NAME}")
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // 手动检查更新：启动时也会自动检查一次（见 WearMailNav），
+                    // 这里是随时可用的入口；结果：发现新版本 → 弹窗，否则顶部提示
+                    SecondaryActionButton(
+                        text = if (state.checkingUpdate) "检查中…" else "检查更新",
+                        icon = WearIcons.Refresh,
+                        enabled = !state.checkingUpdate,
+                        onClick = {
+                            haptics.tick()
+                            vm.checkForUpdates()
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     InfoLine(text = "已适配 466×466 圆形表盘，列表按弦长自动收窄")
                     InfoLine(text = "邮箱密码使用 Android Keystore AES-256-GCM 加密存储")
                 }

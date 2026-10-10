@@ -337,8 +337,13 @@ class AddAccountViewModel(private val container: AppContainer) : ViewModel() {
     /** 选择服务商预设：立即用它填充服务器字段，用户仍可在步骤 2 手动修改 */
     fun selectPreset(preset: ProviderPreset) {
         _uiState.update {
+            // Outlook / Office 365 已停用 IMAP/SMTP 基本认证：选中该预设时把登录方式
+            // 锁定到 OAuth2（UI 同步收窄为只显示 OAuth2），避免用户选到注定失败的密码认证。
+            // 其余预设下 allowedAuthTypes 是全集，保留用户当前选择不变。
+            val allowedAuthTypes = ProviderPresets.authTypesFor(preset.id)
             it.copy(
                 presetId = preset.id,
+                authType = if (it.authType in allowedAuthTypes) it.authType else allowedAuthTypes.first(),
                 imapHost = preset.config.imapHost,
                 imapPort = preset.config.imapPort.toString(),
                 imapSecurity = preset.config.imapSecurity,
@@ -350,6 +355,9 @@ class AddAccountViewModel(private val container: AppContainer) : ViewModel() {
                 probeSuccess = false,
             )
         }
+        // 锁定到 OAuth2（选中 Outlook）时，授权面板要知道「客户端 ID 是否已配置」；
+        // 用户可能刚去设置页填过，这里刷新一次（与 onAuthTypeChange 行为一致）
+        if (_uiState.value.authType == AuthType.OAUTH2) refreshOAuthConfigured()
     }
 
     fun onImapHostChange(value: String) = _uiState.update { it.copy(imapHost = value, error = null) }
@@ -413,22 +421,27 @@ class AddAccountViewModel(private val container: AppContainer) : ViewModel() {
                 // 企业/自建：没有任何可填的默认值，保持原样
                 state.copy(presetId = if (state.presetId.isEmpty()) preset.id else state.presetId)
             } else {
+                // 主机 / 端口 / 加密方式是一个配套的三元组：只在对应主机为空（即整组使用
+                // 预设值）时才回填。若主机已由用户填写，就不能再改端口与加密方式，
+                // 否则会把用户手动选好的加密方式重置回预设值（例如把 STARTTLS 改回 SSL/TLS）。
+                val imapFromPreset = state.imapHost.isBlank()
+                val smtpFromPreset = state.smtpHost.isBlank()
                 state.copy(
                     presetId = if (state.presetId.isEmpty()) preset.id else state.presetId,
                     imapHost = state.imapHost.ifBlank { preset.config.imapHost },
-                    imapPort = if (state.imapHost.isBlank()) {
+                    imapPort = if (imapFromPreset) {
                         preset.config.imapPort.toString()
                     } else {
                         state.imapPort
                     },
-                    imapSecurity = preset.config.imapSecurity,
+                    imapSecurity = if (imapFromPreset) preset.config.imapSecurity else state.imapSecurity,
                     smtpHost = state.smtpHost.ifBlank { preset.config.smtpHost },
-                    smtpPort = if (state.smtpHost.isBlank()) {
+                    smtpPort = if (smtpFromPreset) {
                         preset.config.smtpPort.toString()
                     } else {
                         state.smtpPort
                     },
-                    smtpSecurity = preset.config.smtpSecurity,
+                    smtpSecurity = if (smtpFromPreset) preset.config.smtpSecurity else state.smtpSecurity,
                 )
             }
         }

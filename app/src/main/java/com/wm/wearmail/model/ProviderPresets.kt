@@ -140,4 +140,15 @@ object ProviderPresets {
 
     /** 按 id 查找预设，找不到时返回 [ENTERPRISE] */
     fun byId(id: String): ProviderPreset = all.firstOrNull { it.id == id } ?: ENTERPRISE
+
+    /**
+     * 指定预设支持的认证方式。
+     *
+     * Outlook / Office 365 已全面停用 IMAP/SMTP 的**基本身份验证**（含应用密码），
+     * 第三方客户端只能用 OAuth2。因此该预设下「添加账户」页只展示 OAuth2 一项，
+     * 并把表单的登录方式自动锁定到 OAuth2，避免用户选到注定失败的密码认证；
+     * 其余服务商保留全部可选项（企业/自建服务器两种方式都可能用得上）。
+     */
+    fun authTypesFor(presetId: String): List<AuthType> =
+        if (presetId == OUTLOOK.id) listOf(AuthType.OAUTH2) else AuthType.entries
 }

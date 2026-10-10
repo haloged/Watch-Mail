@@ -159,27 +159,56 @@ class ImapClientImpl : ImapClient {
     // 正文
     // ------------------------------------------------------------------
 
-    override suspend fun fetchBody(
+    /**
+     * 抓取正文的两种形态（一次 IMAP 抓取）。
+     *
+     * `keepHtml = false`（默认）时不保留 HTML —— 与老行为一致，只返回剥离后的纯文本。
+     */
+    override suspend fun fetchBodyDetailed(
         account: Account,
         secrets: AccountSecrets,
         folder: String,
         uid: Long,
-    ): Result<String> =
+        keepHtml: Boolean,
+    ): Result<FetchedBody> =
         withFolder(account, secrets, folder, Folder.READ_ONLY) { target ->
             val uidFolder = target as? UIDFolder
                 ?: throw MailError.Protocol("该服务器不支持 UID 定位邮件")
             val message = uidFolder.getMessageByUID(uid)
                 ?: throw MailError.Protocol("邮件不存在或已被删除（uid=$uid）")
 
-            val text = extractPlainText(message)
-            if (text.length > ImapClient.BODY_MAX_CHARS) {
+            val (rawPlain, rawHtml) = collectText(message, depth = 0)
+
+            // 纯文本：优先 text/plain，缺失时把 HTML 降级为纯文本
+            val plain = rawPlain.ifBlank { HtmlTextExtractor.toPlainText(rawHtml) }.trim()
+            val text = if (plain.length > ImapClient.BODY_MAX_CHARS) {
                 // 只记长度，绝不记正文内容
-                Logs.w(TAG, "正文过长已截断：uid=$uid length=${text.length}")
-                text.take(ImapClient.BODY_MAX_CHARS) + TRUNCATED_SUFFIX
+                Logs.w(TAG, "正文过长已截断：uid=$uid length=${plain.length}")
+                plain.take(ImapClient.BODY_MAX_CHARS) + TRUNCATED_SUFFIX
             } else {
-                text
+                plain
             }
+
+            // HTML：仅按需保留；超过上限整体丢弃（不截断成残缺文档，手表存储经不起）
+            val html = when {
+                !keepHtml || rawHtml.isBlank() -> null
+                EmailHtmlDocument.exceedsLimit(rawHtml) -> {
+                    Logs.w(TAG, "HTML 正文超过保留上限，已丢弃：uid=$uid length=${rawHtml.length}")
+                    null
+                }
+                else -> rawHtml
+            }
+
+            FetchedBody(plainText = text, html = html)
         }
+
+    override suspend fun fetchBody(
+        account: Account,
+        secrets: AccountSecrets,
+        folder: String,
+        uid: Long,
+    ): Result<String> =
+        fetchBodyDetailed(account, secrets, folder, uid, keepHtml = false).map { it.plainText }
 
     // ------------------------------------------------------------------
     // 标记 / 删除
@@ -577,12 +606,6 @@ class ImapClientImpl : ImapClient {
     // ------------------------------------------------------------------
     // 正文抽取
     // ------------------------------------------------------------------
-
-    /** 抽取纯文本正文：优先 text/plain，缺失时才把 text/html 降级为纯文本 */
-    private fun extractPlainText(part: Part): String {
-        val (plain, html) = collectText(part, depth = 0)
-        return if (plain.isNotBlank()) plain.trim() else HtmlTextExtractor.toPlainText(html).trim()
-    }
 
     /**
      * 递归收集 `text/plain` 与 `text/html` 内容。

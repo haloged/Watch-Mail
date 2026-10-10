@@ -15,6 +15,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wm.wearmail.core.AppContainer
 import com.wm.wearmail.core.RotaryBus
 import com.wm.wearmail.ui.screen.accounts.AccountListScreen
@@ -22,6 +23,8 @@ import com.wm.wearmail.ui.screen.accounts.AddAccountScreen
 import com.wm.wearmail.ui.screen.compose.ComposeMailScreen
 import com.wm.wearmail.ui.screen.detail.EmailDetailScreen
 import com.wm.wearmail.ui.screen.inbox.InboxScreen
+import com.wm.wearmail.ui.kit.UpdateAvailableDialog
+import com.wm.wearmail.ui.screen.settings.OAuth2ConfigScreen
 import com.wm.wearmail.ui.screen.settings.SettingsScreen
 import androidx.wear.compose.material3.MaterialTheme
 import kotlinx.coroutines.launch
@@ -56,6 +59,9 @@ sealed interface OverlayRoute {
 
     /** 添加账户 */
     data object AddAccount : OverlayRoute
+
+    /** Outlook OAuth2 客户端 ID 配置（从设置页进入） */
+    data object OAuth2Config : OverlayRoute
 }
 
 /**
@@ -83,6 +89,11 @@ fun WearMailApp(
         pageCount = { pages.size },
     )
     val scope = rememberCoroutineScope()
+
+    // 检查更新：启动时自动检查一次（进程内，失败静默、不阻塞冷启动），
+    // 发现新版本时由下方弹窗提示；设置页手动检查写入同一状态源
+    val updateState by container.updates.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { container.updates.checkOnStartup() }
 
     // 覆盖层路由（null 表示停留在分页页面）
     var overlay by remember { mutableStateOf<OverlayRoute?>(null) }
@@ -138,6 +149,7 @@ fun WearMailApp(
                     container = container,
                     active = isActive,
                     rotaryBus = rotaryBus,
+                    onOpenOAuth2Config = { overlay = OverlayRoute.OAuth2Config },
                 )
             }
         }
@@ -191,6 +203,21 @@ fun WearMailApp(
                 onBack = { overlay = null },
                 onDone = { overlay = null },
             )
+
+            OverlayRoute.OAuth2Config -> OAuth2ConfigScreen(
+                container = container,
+                onBack = { overlay = null },
+            )
         }
+    }
+
+    // ---------------- 发现新版本弹窗 ----------------
+    // 覆盖在所有内容之上（含各覆盖层页面）；启动自动检查与设置页手动检查共用
+    updateState.pendingUpdate?.let { info ->
+        UpdateAvailableDialog(
+            info = info,
+            currentVersion = container.updates.currentVersion,
+            onDismiss = { container.updates.dismissUpdate() },
+        )
     }
 }

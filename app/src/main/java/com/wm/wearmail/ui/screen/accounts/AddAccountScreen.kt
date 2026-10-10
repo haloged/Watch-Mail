@@ -179,6 +179,34 @@ fun AddAccountScreen(
                 }
             }
 
+            // ---------------- 手机扫码配置（置顶） ----------------
+            // 手表端零输入的兜底路径：固定在标题正下方，用户无需翻过整张表单
+            // 就能看到「用手机填」这条捷径；其余内容仍按当前步骤正常排布
+            formSlot(index++, listState) { modifier ->
+                Column(modifier = modifier.fillMaxWidth()) {
+                    // 紧凑胶囊 + 说明文字，保持次要操作的低视觉权重
+                    SecondaryActionButton(
+                        text = "用手机扫码配置",
+                        onClick = {
+                            haptics.tick()
+                            vm.startPairing()
+                        },
+                        icon = WearIcons.Phone,
+                        enabled = !state.pairingVisible,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "手机与手表连接同一个 Wi-Fi 后扫码，在手机上填写邮箱信息",
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
             when (state.step) {
                 AddAccountViewModel.STEP_EMAIL -> {
                     // ---------------- 步骤 1：邮箱与密码 ----------------
@@ -212,14 +240,19 @@ fun AddAccountScreen(
                         )
                     }
 
-                    // 认证方式：OAuth2 场景允许密码为空
+                    // 认证方式：Outlook 只保留 OAuth2（微软已停用基本认证，见
+                    // ProviderPresets.authTypesFor），其余服务商显示全部可选项；
+                    // OAuth2 场景允许密码为空
+                    val availableAuthTypes = ProviderPresets.authTypesFor(state.presetId)
                     formSlot(index++, listState) { modifier ->
                         SectionHeader(text = "登录方式（可选）", modifier = modifier)
                     }
-                    AuthType.entries.let { types ->
+                    availableAuthTypes.let { types ->
                         formSlot(index++, listState, key = "auth-group") { modifier ->
                             CompactOptionGroupOf(
                                 labels = types.map { it.label },
+                                // 契约：selectPreset 已保证 state.authType ∈ types（Outlook 会自动
+                                // 切到 OAuth2），因此这里不会出现 -1 的未选中态
                                 selectedIndex = types.indexOf(state.authType),
                                 onSelect = { position ->
                                     haptics.tick()
@@ -530,32 +563,6 @@ fun AddAccountScreen(
                             vm.nextStep()
                         },
                         modifier = modifier.fillMaxWidth(),
-                    )
-                }
-            }
-
-            // 手机扫码配置：手表端零输入的兜底路径
-            formSlot(index, listState) { modifier ->
-                Column(modifier = modifier.fillMaxWidth()) {
-                    // 手机扫码配置属次要入口：紧凑胶囊 + 说明文字
-                    SecondaryActionButton(
-                        text = "用手机扫码配置",
-                        onClick = {
-                            haptics.tick()
-                            vm.startPairing()
-                        },
-                        icon = WearIcons.Phone,
-                        enabled = !state.pairingVisible,
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "手机与手表连接同一个 Wi-Fi 后扫码，在手机上填写邮箱信息",
-                        modifier = Modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

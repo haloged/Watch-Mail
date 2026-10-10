@@ -91,23 +91,40 @@ fun CircularSafeLazyColumn(
     }
 
     // ---------------- 下拉刷新 ----------------
+    // 关键：把手势判定放在 onPostScroll（子节点先消费，剩下的才轮到我们），
+    // 而不是 onPreScroll（父节点先抢）。早期实现在 onPreScroll 里无条件消费
+    // `available.y > 0`，导致列表不在顶部时「向下拖回」的前 96dp 位移被吞掉 ——
+    // 表现为列表滚不动，且松手就误触发一次全量同步。
     val nestedScrollConnection = remember(onPullToRefresh, thresholdPx, maxPullPx) {
         object : NestedScrollConnection {
             /**
-             * 在列表消费滚动之前介入：
-             * - 手指向下拖（available.y > 0）且列表已到顶时，把位移转成「下拉位移」并消费掉；
-             * - 手指向上拖时优先把已积累的下拉位移收回，避免指示器卡住。
+             * 列表消费完之后，把**它吃不下**的向下位移（`available.y > 0`）累计为下拉位移。
+             * 列表还能往回滚时，这部分位移会被列表自己消费掉（`available.y == 0`），
+             * 因此无需（也无法）在这里判断「是否已到顶」。
+             */
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (onPullToRefresh == null) return Offset.Zero
+                // 只认手指拖动：惯性阶段的溢出位移不该把指示器顶出来
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (available.y <= 0f) return Offset.Zero
+                val room = (maxPullPx - pullOffset).coerceAtLeast(0f)
+                val consumedByPull = available.y.coerceAtMost(room)
+                if (consumedByPull <= 0f) return Offset.Zero
+                pullOffset += consumedByPull
+                return Offset(0f, consumedByPull)
+            }
+
+            /**
+             * 手指反向拖动时先把已积累的下拉位移收回去（指示器跟着缩），
+             * 收完之后列表才继续滚 —— 否则指示器会卡在屏幕上。
              */
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (onPullToRefresh == null) return Offset.Zero
-                if (available.y > 0f) {
-                    val room = (maxPullPx - pullOffset).coerceAtLeast(0f)
-                    val consumed = available.y.coerceAtMost(room)
-                    if (consumed > 0f) {
-                        pullOffset += consumed
-                        return Offset(0f, consumed)
-                    }
-                } else if (available.y < 0f && pullOffset > 0f) {
+                if (available.y < 0f && pullOffset > 0f) {
                     val consumed = (-available.y).coerceAtMost(pullOffset)
                     pullOffset -= consumed
                     return Offset(0f, -consumed)
@@ -162,6 +179,10 @@ fun CircularSafeLazyColumn(
  * }
  * ```
  *
+ * 说明：LazyList 的 item offset 以「内容区」（顶部 contentPadding 内侧）为原点，
+ * 本组件内部会先换算成屏幕坐标再套用圆形几何模型
+ * （详见 [CircularMetrics.horizontalPaddingForItem] 的坐标系说明）。
+ *
  * @param minContentWidthPx 兜底内容宽度（px）。位于表盘上下极边缘时，
  *        弦长会趋近 0，若不设下限会导致内容被压成一条线而无法操作。
  */
@@ -177,7 +198,8 @@ fun CircularItem(
     val density = LocalDensity.current
     val horizontalPadding: Dp by remember(index, safeRadiusPx, minContentWidthPx, density) {
         derivedStateOf {
-            val info = state.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+            val layoutInfo = state.layoutInfo
+            val info = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
             val paddingPx = if (info == null) {
                 // 首帧尚未测量：按圆心处的最大可用宽度兜底，避免抖动
                 CircularMetrics.horizontalPaddingFor(
@@ -187,9 +209,13 @@ fun CircularItem(
                     minWidthPx = minContentWidthPx,
                 )
             } else {
-                CircularMetrics.horizontalPaddingFor(
-                    top = info.offset.toFloat(),
-                    bottom = (info.offset + info.size).toFloat(),
+                // 注意：info.offset 是「内容区坐标」（原点在顶部 contentPadding 内侧），
+                // 必须通过 horizontalPaddingForItem 换算成屏幕坐标后再算弦长；
+                // 直接使用 offset 会让最宽点整体下移一个顶部内边距（放大位置偏下）。
+                CircularMetrics.horizontalPaddingForItem(
+                    contentOffset = info.offset,
+                    itemSize = info.size,
+                    beforeContentPadding = layoutInfo.beforeContentPadding,
                     radius = safeRadiusPx,
                     minWidthPx = minContentWidthPx,
                 )

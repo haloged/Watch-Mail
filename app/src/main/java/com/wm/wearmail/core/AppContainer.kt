@@ -31,6 +31,8 @@ import com.wm.wearmail.pairing.PairingController
 import com.wm.wearmail.pairing.PairingService
 import com.wm.wearmail.sync.SyncEngine
 import com.wm.wearmail.sync.SyncService
+import com.wm.wearmail.update.GitHubUpdateChecker
+import com.wm.wearmail.update.UpdateCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -94,6 +96,20 @@ class AppContainer(val app: Application) {
     val notifications: MailNotifier by lazy { NotificationCenter(this) }
     val sync: SyncService by lazy { SyncEngine(this) }
     val pairing: PairingService by lazy { PairingController(this) }
+
+    // ---------------- 检查更新 ----------------
+    /**
+     * 检查更新：启动时自动检查一次（UI 层触发，不阻塞冷启动）+ 设置页手动检查。
+     *
+     * 数据源为 GitHub Releases API（`repos/haloged/Watch-Mail/releases/latest`）；
+     * 检查失败只影响该功能本身，不干扰同步/通知等主链路。
+     */
+    val updates: UpdateCenter by lazy {
+        UpdateCenter(
+            checker = GitHubUpdateChecker(),
+            currentVersion = BuildConfig.VERSION_NAME,
+        )
+    }
 
     companion object {
         @Volatile

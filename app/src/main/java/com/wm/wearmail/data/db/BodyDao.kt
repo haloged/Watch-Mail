@@ -52,11 +52,68 @@ class BodyDao(private val db: MailDatabase) {
         return row?.text
     }
 
-    /** 写入/覆盖正文缓存；`size_chars` 冗余存储，便于淘汰统计时不必读取大文本 */
-    fun insertOrReplace(emailId: Long, text: String, downloadedAt: Long) {
+    /**
+     * 读取缓存的**原始 HTML**。
+     *
+     * 返回 null 表示「没有可渲染的 HTML」—— 可能是没问过服务器，也可能是问了但没有，
+     * 需要区分时用 [queryHtmlState]。HTML 动辄几十到几百 KB，只显示纯文本时不该把它读进内存。
+     */
+    fun queryHtml(emailId: Long): String? = db.read { d ->
+        d.query(
+            BodiesTable.NAME,
+            arrayOf(BodiesTable.BODY_HTML),
+            "${BodiesTable.EMAIL_ID} = ?",
+            arrayOf(emailId.toString()),
+            null,
+            null,
+            null,
+        ).use { c ->
+            if (c.moveToFirst()) c.getString(0)?.takeIf { it.isNotEmpty() } else null
+        }
+    }
+
+    /**
+     * HTML 缓存的三态（见 [HtmlCacheState]）。
+     *
+     * 用途：判断「是否还需要为了 HTML 联网」—— [HtmlCacheState.UNKNOWN] 才需要补取一次，
+     * [HtmlCacheState.NONE] 说明这封邮件本来就没有可渲染的 HTML，不该反复重下正文。
+     */
+    fun queryHtmlState(emailId: Long): HtmlCacheState = db.read { d ->
+        d.query(
+            BodiesTable.NAME,
+            arrayOf(BodiesTable.BODY_HTML),
+            "${BodiesTable.EMAIL_ID} = ?",
+            arrayOf(emailId.toString()),
+            null,
+            null,
+            null,
+        ).use { c ->
+            if (c.moveToFirst()) HtmlCacheState.fromColumnValue(c.getString(0)) else HtmlCacheState.UNKNOWN
+        }
+    }
+
+    /**
+     * 写入/覆盖正文缓存。
+     *
+     * @param html 原始 HTML；null 表示本次没拿到
+     * @param htmlRequested 本次是否确实请求了 HTML。为 true 且 [html] 为 null 时会记下
+     *   [HtmlCacheState.NONE]（「这封邮件没有可渲染的 HTML」），否则记为
+     *   [HtmlCacheState.UNKNOWN]（下次还可以补取）。这条区分是必需的：
+     *   少了它，纯文本邮件会被反复判定为「缓存不完整」，既白下载又无法离线阅读。
+     *   `size_chars` 只统计纯文本（LRU 淘汰按访问时间，不依赖字符数）。
+     */
+    fun insertOrReplace(
+        emailId: Long,
+        text: String,
+        downloadedAt: Long,
+        html: String? = null,
+        htmlRequested: Boolean = false,
+    ) {
         val values = ContentValues().apply {
             put(BodiesTable.EMAIL_ID, emailId)
             put(BodiesTable.BODY_TEXT, text)
+            // 三态写入：有 HTML 写内容，「问过但没有」写空串，「没问过」留 SQL NULL
+            putNullable(BodiesTable.BODY_HTML, HtmlCacheState.toColumnValue(html, htmlRequested))
             put(BodiesTable.DOWNLOADED_AT, downloadedAt)
             put(BodiesTable.LAST_ACCESS_AT, System.currentTimeMillis())
             put(BodiesTable.SIZE_CHARS, text.length)

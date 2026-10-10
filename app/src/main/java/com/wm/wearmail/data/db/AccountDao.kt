@@ -43,21 +43,22 @@ class AccountDao(private val db: MailDatabase) {
     }
 
     /**
-     * 全量更新账户非敏感字段。
+     * 全量更新账户非敏感字段，并按 [SecretWrite] 的**显式意图**处理两列密文。
      *
-     * [passwordEnc] / [tokenEnc] 为 null 表示**不覆盖**原有密文列，
-     * 这样「只改别名」的编辑流程不会误清空凭据。
+     * 密文列**不能**再用「参数是 null 就不覆盖」这种隐含约定：`ContentValues` 里的 null
+     * 就是「写成 SQL NULL」，早期实现因此让「只改别名」的重命名流程清空了凭据。
+     * 现在必须显式传 [SecretWrite.Keep]（不改动）或 [SecretWrite.Set]&#40;null&#41;（清空）。
      *
      * @return 是否命中并更新了记录
      */
-    fun update(account: Account, passwordEnc: String?, tokenEnc: String?): Boolean {
+    fun update(account: Account, password: SecretWrite, token: SecretWrite): Boolean {
         if (account.id <= 0L) {
             Logs.w(TAG, "update 收到 id<=0 的账户，已忽略")
             return false
         }
         val values = accountValues(account).apply {
-            putNullable(AccountsTable.PASSWORD_ENC, passwordEnc)
-            putNullable(AccountsTable.OAUTH_TOKEN_ENC, tokenEnc)
+            putSecret(AccountsTable.PASSWORD_ENC, password)
+            putSecret(AccountsTable.OAUTH_TOKEN_ENC, token)
         }
         val rows = db.write {
             it.update(AccountsTable.NAME, values, "${AccountsTable.ID} = ?", arrayOf(account.id.toString()))
@@ -138,6 +139,19 @@ class AccountDao(private val db: MailDatabase) {
     // ------------------------------------------------------------------
     // 内部工具
     // ------------------------------------------------------------------
+
+    /**
+     * 按写入意图处理单个密文列。
+     *
+     * [SecretWrite.Keep] 时**完全不写该列**（保留数据库中的原密文）；
+     * [SecretWrite.Set] 时写入（值为 null 才是显式清空）。
+     */
+    private fun ContentValues.putSecret(key: String, write: SecretWrite) {
+        when (write) {
+            SecretWrite.Keep -> Unit
+            is SecretWrite.Set -> putNullable(key, write.value)
+        }
+    }
 
     /** 非敏感列的统一映射，避免 insert/update 两处字段不一致 */
     private fun accountValues(account: Account): ContentValues = ContentValues().apply {

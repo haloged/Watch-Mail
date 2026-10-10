@@ -126,6 +126,44 @@ class CircularMetricsTest {
         assertEquals(103f, padding, 0.5f)
     }
 
+    // ---------------- LazyList 内容坐标 → 屏幕坐标 ----------------
+
+    @Test
+    fun `列表项坐标先换算到屏幕坐标系再算弦长`() {
+        val itemSize = 100
+        val beforePadding = 60
+        for (contentOffset in listOf(0, 123, 173, 400)) {
+            val screenTop = (contentOffset + beforePadding).toFloat()
+            val expected = CircularMetrics.horizontalPaddingFor(screenTop, screenTop + itemSize)
+            val actual = CircularMetrics.horizontalPaddingForItem(
+                contentOffset = contentOffset,
+                itemSize = itemSize,
+                beforeContentPadding = beforePadding,
+            )
+            assertEquals("contentOffset=$contentOffset 应与屏幕坐标直接计算一致", expected, actual, delta)
+        }
+    }
+
+    @Test
+    fun `顶部内边距不影响最宽点对齐屏幕圆心`() {
+        // 高 100px 的列表项，其中心落在屏幕圆心（屏幕 233）时，内容坐标为 233 - 60 - 50 = 123。
+        // 旧缺陷把内容坐标当屏幕坐标用，使「最宽点」误判在内容坐标 233（屏幕 293）——
+        // 即最宽状态出现在表盘中心**偏下** 60px 的位置。
+        val atCenter = CircularMetrics.horizontalPaddingForItem(
+            contentOffset = 123,
+            itemSize = 100,
+            beforeContentPadding = 60,
+        )
+        val shiftedDown = CircularMetrics.horizontalPaddingForItem(
+            contentOffset = 183,
+            itemSize = 100,
+            beforeContentPadding = 60,
+        )
+        assertTrue("居中项应比下移 60px 的项更宽：$atCenter !< $shiftedDown", atCenter < shiftedDown)
+        // 等价断言：换算结果必须与「屏幕区间 183..283」直接计算完全一致
+        assertEquals(CircularMetrics.horizontalPaddingFor(183f, 283f), atCenter, delta)
+    }
+
     // ---------------- 命中与触控 ----------------
 
     @Test

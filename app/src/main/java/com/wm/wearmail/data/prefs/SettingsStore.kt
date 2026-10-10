@@ -49,6 +49,21 @@ data class AppSettings(
     val microsoftOAuthClientId: String = "",
     /** Microsoft OAuth2 租户：默认 `common`（同时支持个人账号与企业账号） */
     val microsoftOAuthTenant: String = "common",
+    /**
+     * 是否在邮件详情里渲染 HTML（**默认关闭**）。
+     *
+     * 默认关闭的原因：渲染 HTML 需要 WebView（内存占用明显高于纯文本），
+     * 而且原始 HTML 会被写进正文缓存（一封营销邮件常见几十到几百 KB）。
+     * 纯文本模式在这两点上都更省，因此交由用户按设备性能自行开启。
+     */
+    val htmlRenderingEnabled: Boolean = false,
+    /**
+     * HTML 渲染时是否允许加载**远程图片**（**默认关闭**）。
+     *
+     * 远程图片经常被用作追踪像素（打开邮件即向发件人回传"已读 + IP"），
+     * 手表上默认屏蔽；确实需要看图时再由用户显式打开。
+     */
+    val remoteImagesEnabled: Boolean = false,
 ) {
     /** 后台间隔必须落在系统允许的 15 分钟以上 */
     val normalizedBackgroundMinutes: Int

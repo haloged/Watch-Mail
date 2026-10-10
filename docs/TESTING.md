@@ -49,7 +49,7 @@ python tools/test_summary.py
 
 | 测试类 | 用例数 | 覆盖行为 | 对应需求 |
 |--------|-----:|---------|---------|
-| `CircularMetricsTest` | 14 | 安全半径 210px / 边缘缓冲 23px / 弦长公式 / 列表项取最远端收窄 / 触控 48px 下限 / 左右对称 | 圆形适配、触控热区 |
+| `CircularMetricsTest` | 16 | 安全半径 210px / 边缘缓冲 23px / 弦长公式 / 列表项取最远端收窄 / **内容坐标→屏幕坐标换算（最宽点对齐表盘中心）** / 触控 48px 下限 / 左右对称 | 圆形适配、触控热区 |
 | `TimeFormatTest` | 11 | 今天 HH:mm、本周 周X、同年 MM/DD、跨年 yyyy/MM/DD、ISO 跨年周、相对时间 | 时间智能格式 |
 | `HtmlTextExtractorTest` | 22 | 标签剥离、`<br>/<p>` 转换、脚本样式移除、实体解码、空行压缩 | 正文纯文本渲染 |
 | `MimeAddressSupportTest` | 22 | `"张三" <a@b.com>` 解析、多地址、带逗号的显示名、往返序列化、非法输入 | 发件人与收件人 |
@@ -63,11 +63,17 @@ python tools/test_summary.py
 | `PairingPageTest` | 13 | 网页与**服务端解析的契约**：字段名、枚举值（非中文标签）、主机不得 `required`、无 `novalidate`、token 转义 | 扫码配置（防前端/后端漂移） |
 | `AccountFormValidatorTest` | 18 | 邮箱/端口/主机校验、边界值 | 账户配置 |
 | `InboxRowFormatterTest` | 21 | 发件人/主题截断、空主题、未读角标边界 | 列表项展示 |
-| **合计** | **221** | | |
+| `EmailHtmlDocumentTest` | 13 | 渲染前清理不可信片段（script/iframe/meta refresh/`javascript:` 伪协议、大小写混写）、注入 viewport 与圆屏内边距、深色适配、默认屏蔽远程图片、超长 HTML 上限与截断 | 邮件 HTML 渲染（可选） |
+| `SecretWriteTest` | 5 | 密文列写入意图：`Keep`（不改动）与 `Set(null)`（显式清空）语义分离、`of(update=false)` 恒为 Keep、`Set` 按值相等 | 账户凭据安全（P0 防回归） |
+| `HtmlCacheStateTest` | 8 | 三态映射（SQL NULL / 空串 / 非空文本）、抓取结果写列、往返一致、`resolved` 必须精确等于「不是 UNKNOWN」 | 正文缓存完整性（P1 防回归） |
+| `ProviderPresetsTest` | 4 | Outlook 仅 OAuth2（其余预设不受限）、未知预设回退全集、认证方式列表非空契约 | 添加账户（Outlook OAuth2 锁定） |
+| `AppVersionTest` | 6 | 语义化版本解析（`v` 前缀/预发布后缀/非法输入）、逐段数值比较（`1.10.0 > 1.9.0`）、解析失败不误报 | 检查更新（版本比较） |
+| `UpdateJsonTest` | 6 | GitHub Releases 响应解析：完整字段、`body=null`、字段缺失/空白、非法 JSON 均安全返回 null | 检查更新（响应解析） |
+| **合计** | **265** | | |
 
 ## 4. 静态检查
 
-`tools/static_checks.py` 的检查项与失败含义（**12 项全部通过**）：
+`tools/static_checks.py` 的检查项与失败含义（**19 项全部通过**）：
 
 | 检查 | 失败含义 |
 |------|---------|
@@ -81,11 +87,18 @@ python tools/test_summary.py
 | **AES-GCM 与 Android Keystore 兼容** | 加密时向 `Cipher.init` 传了调用方 IV（Keystore 会抛 `InvalidAlgorithmParameterException`），或解密路径没传 IV |
 | **圆屏纵向预算** | 顶部/底部固定条把信息流挤到干净可视带 < 100dp（用户两次反馈"信息流太小"的量化形式），或迷你按钮低于 48px 触控下限 |
 | **覆盖层不透明且拦截指针** | 覆盖层根节点漏画背景（会透出下层页面）或导航层漏拦指针（空白处会误触下层分页） |
+| **账户密文列写入语义（SecretWrite）** | `AccountDao.update` 直接对密文列 `putNullable`：null 会被写成 SQL NULL，静默清空已存凭据（重命名账户即触发；DAO 依赖 `android.database.*`，纯 JVM 单测覆盖不到） |
+| **正文 HTML 缓存三态语义** | `body_html` 的 NULL 兼当「没问过」与「问过但没有」：纯文本邮件被反复重下、离线打不开；断言 `BodyDao` 用 `HtmlCacheState.toColumnValue` 写列、`SyncEngine` / `EmailDetailViewModel` 用 `cachedHtmlState` 判完整性 |
+| **列表项坐标换算（内容坐标→屏幕坐标）** | `CircularItem` 直接把 `LazyListItemInfo.offset`（原点在内容区起点）当屏幕 Y 用：少加一个 `beforeContentPadding`，最宽点整体下移一个顶部内边距，实机表现为控件到表盘中心时仍未放大到最宽 |
+| Outlook 认证方式仅 OAuth2 | 选中 Outlook 预设时登录方式重新枚举 `AuthType.entries`（露出已被微软停用的密码选项），或 `ProviderPresets.authTypesFor` / `selectPreset` 的锁定被绕过 |
+| release 启用 R8 优化 | release 关掉 `isMinifyEnabled` / `isShrinkResources`、默认规则换成 `proguard-android.txt`、或加入 `-dontoptimize` / `-dontobfuscate`（R8 优化被静默关闭） |
+| **检查更新链路约束** | GitHub API 缺 `User-Agent`（返回 403，真机只表现为"检查失败"）；版本比较绕过 `AppVersion.isNewer`（`1.10.0` 会被判小于 `1.9.0`）；`UpdateCenter` 未注册 / 启动检查未接入弹窗；Application 冷启动路径发起网络请求（拖慢启动） |
+| OAuth2 配置独立页面 | 设置页重新出现 OAuth2 输入框（应只保留入口按钮，输入框在 `OAuth2ConfigScreen`）；独立页或导航入口缺失（用户将无法配置 OAuth2） |
 | Kotlin 括号配平 | 明显的语法破损 |
 | 每个 Kotlin 文件声明包名 | 文件头缺失 `package`，构建失败 |
 
-> 静态规则的价值在于**把"真机才发现的问题"变成可自动检查的约束**。上面三条加粗规则
-> 分别对应三个真实缺陷（§5.3 的 3/4/5/6），且每条都用「模拟回到缺陷版本」验证过它确实会 FAIL。
+> 静态规则的价值在于**把"真机/联调才发现的问题"变成可自动检查的约束**。上面的加粗规则
+> 各自对应一个真实缺陷（§5.3 的 3/4/5/6/7/8），且每条都用「模拟回到缺陷版本」验证过它确实会 FAIL。
 
 ## 5. 构建与测试结果
 
@@ -93,16 +106,17 @@ python tools/test_summary.py
 
 | 任务 | 结果 | 产物 |
 |------|------|------|
-| `:app:testDebugUnitTest` | ✅ 221 / 221 通过 | `app/build/reports/tests/testDebugUnitTest/index.html` |
-| `:app:assembleDebug` | ✅ BUILD SUCCESSFUL（**27.76 MB**） | `app/build/outputs/apk/debug/app-debug.apk` |
-| `:app:assembleRelease`（R8 + 资源压缩） | ✅ BUILD SUCCESSFUL（**3.35 MB**） | `app/build/outputs/apk/release/app-release.apk` |
+| `:app:testDebugUnitTest` | ✅ 265 / 265 通过 | `app/build/reports/tests/testDebugUnitTest/index.html` |
+| `:app:assembleDebug` | ✅ BUILD SUCCESSFUL（**27.73 MB**） | `app/build/outputs/apk/debug/app-debug.apk` |
+| `:app:assembleRelease`（R8 压缩+混淆+优化 + 资源压缩） | ✅ BUILD SUCCESSFUL（**3.46 MB**） | `app/build/outputs/apk/release/app-release.apk` |
 
-代码规模：87 个 Kotlin 文件 / 约 15,800 行。编译期仅有弃用警告（`Icons.Filled.ArrowBack`
-等迁移到 `Icons.AutoMirrored`，Material Icons 1.7.7 的 deprecation），不影响功能。
+代码规模：主源码 86 个 Kotlin 文件 / 约 18,290 行，测试 20 个文件 / 约 3,300 行。
+编译期仅有弃用警告（`Icons.Filled.ArrowBack` 等迁移到 `Icons.AutoMirrored`，
+Material Icons 1.7.7 的 deprecation），不影响功能。
 
-### 5.2 单元测试：221 / 221 全部通过
+### 5.2 单元测试：265 / 265 全部通过
 
-逐类结果见 §3 的用例数，合计 **221 用例 / 0 失败 / 0 错误 / 0 跳过**，总耗时约 0.7 秒。
+逐类结果见 §3 的用例数，合计 **265 用例 / 0 失败 / 0 错误 / 0 跳过**，用例耗时合计约 0.5 秒。
 
 其中 `ConfigWebServerTest` 是**真实起 HTTP 服务**（`ServerSocket` 绑定随机端口）并用
 `HttpURLConnection` 发 GET/POST 的集成式单元测试，覆盖查询串 URL 解码、表单正文解析、
@@ -223,6 +237,36 @@ python tools/test_summary.py
 防回归：新增静态检查「圆屏纵向预算」，断言干净带 ≥ 100dp 且迷你按钮 ≥ 48px
 （已用 65dp / 9dp 两个历史布局验证规则会 FAIL）。
 
+**（7）代码审阅发现的 P0/P1 缺陷（本轮：2 P0 + 3 P1 + 1 连带）**
+
+一次完整的"通读文档 + 全部源码"审阅发现 5 处缺陷，共同点是**边界语义被 `null` 兼当两种含义**
+或**状态在错误的时机被固化**，因此格式检查与常规单测都难以发现。
+
+| # | 缺陷 | 根因 | 修复与防回归 |
+|---|------|------|-------------|
+| 1（P0） | **重命名账户会静默清空凭据** | `AccountDao.update` 的 KDoc 写「参数 null 表示不覆盖」，实现却把 null 写成 SQL NULL；`AccountListViewModel.rename()` 正是传 null → 改完别名就收不到信，提示重新配置 | 新增 `SecretWrite`（`Keep` / `Set`）把「不改动 / 显式清空」提升到类型层；新增 `updateOAuthTokens` 让令牌刷新不再整行覆写密码列。`SecretWriteTest`（5 例）+ 静态检查「账户密文列写入语义」（已用缺陷版本验证规则会 FAIL） |
+| 2（P0） | **列表不在顶部时「向下拖回」被吞、松手误触发全量同步** | 下拉刷新在 `onPreScroll` 无条件消费 `available.y > 0`，且无法判断「是否已到顶部」 | 判定移到 `onPostScroll`（列表先消费，吃不下的过卷位移才算下拉），`onPreScroll` 只回收已积累位移——未到顶部时手势完全不拦截 |
+| 3（P1） | **「HTML 渲染」开关看起来不生效** | 详情页用 `remember(emailId){ mutableStateOf(canRenderHtml) }`，首帧 `html` 尚为 null 就把开关固化成 false | 改为「用户选择优先，否则跟随 HTML 可用性」（`htmlUserChoice ?: canRenderHtml`） |
+| 4（P1） | **纯文本邮件被反复重下正文、离线打不开** | `body_html` 的 NULL 兼当「没问过服务器」与「问了但没有」；开启 HTML 渲染后这类邮件永远被判「缓存不完整」→ 走网络分支，离线直接报错 | 新增 `HtmlCacheState` 三态（NULL / 空串 / 非空文本）；`SyncEngine` 只在 `UNKNOWN` 时补取、离线回退已缓存的纯文本；`HtmlCacheStateTest`（8 例）+ 静态检查「正文 HTML 缓存三态语义」（已用缺陷版本验证规则会 FAIL） |
+| 5（P1） | **预设自动回填会覆盖用户选好的加密方式** | `AddAccountViewModel.applyDetectedPresetIfEmpty` 对主机/端口「只在为空时填」，对加密方式却无条件覆盖 | 主机/端口/加密方式视为配套三元组：只有对应主机为空时才整组回填 |
+
+连带修复（与 #1 同一路径）：`OAuthTokenService.freshSecrets` 对「手机扫码粘贴令牌」的
+OAuth2 账户（令牌存在密码列）一律报「尚未完成授权」，现改为放行密码非空的情况。
+
+> P2 级问题（不影响主流程的健壮性改进）在审阅中一并记录，不在本轮修复范围。
+
+**（8）表盘中心放大位置偏下（由用户实机反馈发现）**
+
+实机反馈：列表项滚动到表盘中心时**没有放大到最宽**，最宽状态出现在中心偏下的位置。
+根因是坐标系少了一步换算：`LazyListItemInfo.offset` 的原点在**内容区起点**
+（顶部 `contentPadding` 内侧 —— LazyList 只在最终 place 阶段叠加 `visualItemOffset`），
+而圆形几何模型以屏幕左上角为原点。直接把 `offset` 当屏幕 Y 算弦长，等于把「最宽处」
+误判在屏幕中心**偏下** `beforeContentPadding`（列表页 30dp≈60px）的位置。
+
+| 缺陷 | 根因 | 修复与防回归 |
+|------|------|-------------|
+| （P1）**控件滚到表盘中心时未放大到最宽，最宽位置偏下** | `CircularItem` 少加一个 `beforeContentPadding`，把内容坐标当屏幕坐标使用 | 新增 `CircularMetrics.horizontalPaddingForItem` 统一完成「内容坐标→屏幕坐标」换算；`CircularMetricsTest` 新增 2 例（换算等价性 + 最宽点对齐屏幕圆心）；静态检查「列表项坐标换算」（已用缺陷版本验证规则会 FAIL） |
+
 ### 5.4 复现命令
 
 ```bash
@@ -236,10 +280,12 @@ python tools/test_summary.py
 python tools/static_checks.py
 ```
 
-静态检查结果：**12 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
+静态检查结果：**19 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
 统一日志门面、无 `System.out`、加解密不依赖 `android.util.Base64`、
 **AES-GCM 与 Android Keystore 兼容**、**圆屏纵向预算**、**覆盖层不透明且拦截指针**、
-括号配平、包名声明）。
+**账户密文列写入语义（SecretWrite）**、**正文 HTML 缓存三态语义**、
+**列表项坐标换算（内容坐标→屏幕坐标）**、Outlook 认证方式仅 OAuth2、release 启用 R8 优化、
+**检查更新链路约束**、OAuth2 配置独立页面、括号配平、包名声明）。
 
 ### 5.5 构建环境说明（不影响交付物本身）
 
@@ -314,7 +360,7 @@ python tools/static_checks.py
     下拉刷新该账户应能正常收信（说明密码已加密写入、并能用 Keystore 密钥解密回来）。
     若保存时报 `InvalidAlgorithmParameterException`，说明 Keystore 的随机化加密约束又被破坏
     （见 §5.3 第 5 条，已有静态检查守着）。
-24. **Outlook OAuth2（设备码流）**：先在「设置 → Outlook OAuth2」填入自己注册的客户端 ID
+24. **Outlook OAuth2（设备码流）**：先在「设置 → Outlook OAuth2 → OAuth2 客户端 ID 配置」填入自己注册的客户端 ID
     （注册步骤见 [TECHNICAL.md](TECHNICAL.md) 的「启用 Outlook（OAuth2）」），然后「添加账户」→
     邮箱填 Outlook 地址 → 登录方式选 **OAuth2 令牌** → 「获取授权」：
     - 手表应显示 8 位短码 + 二维码 + 授权网址；
@@ -332,3 +378,43 @@ python tools/static_checks.py
       用于区分"系统不允许"与"应用内被关掉"），但自检结论必须明确说明真实邮件会被拦下。
 26. **信息流可视带**：收件箱中间可见的邮件行数应 ≥ 3 行；顶部筛选胶囊与底部「新建邮件」
     按钮视觉高度应约为普通按钮的一半，且**仍然容易点中**（热区 48px）。
+27. **邮件 HTML 渲染（可选功能）**：设置 → 「邮件正文」→ 开启「渲染 HTML 邮件」：
+    - 打开一封**排版型邮件**（营销邮件/带表格的邮件）：应先短暂加载，然后正文以
+      HTML 排版显示（标题变大、颜色/表格保留）；
+    - 右上角出现「HTML / 纯文本」胶囊：点击可切换，**切回纯文本后排版消失、内容仍在**；
+    - 默认**不加载远程图片**（正文里图片位置留空）：这是追踪像素防护，不是缺陷；
+      打开「显示远程图片」后重新进入，图片应能显示；
+    - **安全自检**：HTML 里的脚本不应执行（可发一封带 `<script>` 的邮件验证页面无异常）；
+      点击正文里的链接**不应跳转**（手表无浏览器，跳走会困在 WebView 里）；
+    - **性能观察**：开启后打开长邮件时观察是否卡顿/发热；若明显影响流畅度，关掉开关即可
+      回到纯文本（这是该功能默认关闭的原因）；
+    - 关闭开关后再打开同一封邮件：应回到纯文本（缓存中的 HTML 不再使用）。
+28. **数据库迁移**：从「已装过旧版本（库 v1）」的手表升级安装后，**原有账户与邮件不应丢失**；
+    日志中应出现「迁移 v1 → v2：email_bodies 新增 body_html 列」。
+29. **重命名账户不清空凭据**（P0 防回归）：账户管理里给某账户改个别名并保存，
+    回到收件箱下拉刷新，**应能正常收信、不提示重新配置**；杀掉应用重开后仍正常
+    （密码/OAuth 密文未被清空）。
+30. **纯文本邮件离线可读**（P1 防回归）：开启「渲染 HTML 邮件」后打开一封
+    **正文是纯文本**的邮件；然后开飞行模式再次打开同一封：应直接显示已缓存的正文，
+    不报「网络不可用」，也不反复出现「加载中」重下载。
+31. **表盘中心放大对齐**（§5.3（8）防回归）：打开邮件较多的列表（如收件箱）慢慢上下滚动：
+    观察每行宽度随位置收窄/放宽 —— **行中心到达屏幕正中心时应达到最宽**；
+    若最宽位置明显出现在中心偏下（偏差 ≈ 半个按钮高度），说明坐标系换算又被改回去了。
+32. **Outlook 只保留 OAuth2**：添加账户 → 步骤 1 选「Outlook / Hotmail」预设：
+    登录方式选项组应**只剩「OAuth2 令牌」一项**且已自动选中，凭据区直接显示授权面板；
+    再切回 Gmail / QQ 等预设：登录方式恢复三项可选（不应被误锁）。
+33. **手机扫码入口置顶**：进入添加账户页，**不需要滚动**，标题正下方即可看到
+    「用手机扫码配置」；步骤 1/2/3 切换时它始终在顶部；点击后正常弹出二维码对话框。
+34. **检查更新（自动 + 手动）**：
+    - 自动：在一台装着旧版本的表上启动应用，首帧渲染后 1~2 秒内应弹出「发现新版本 vX.Y.Z」；
+      点「稍后」关闭后**重新启动应用应再次提示**（不持久化跳过）；
+    - 手动：设置 → 关于 → 「检查更新」。已是最新时顶部提示「已是最新版本」；
+      断开网络再点，应提示「检查更新失败：网络不可用或请求被拒绝」，按钮恢复可用；
+    - 边界：GitHub 不可达（部分网络环境）时应用**不得崩溃或卡顿**，其余功能完全不受影响。
+35. **更新弹窗的下载跳转**：弹窗点「前往下载」——有浏览器的手表应打开 Release 页并关闭弹窗；
+    没有浏览器时弹窗**不消失**，改为显示 GitHub 地址指引、按钮切换为「知道了」（不得闪退）。
+36. **Outlook OAuth2 独立配置页**：设置 → Outlook OAuth2 → 「OAuth2 客户端 ID 配置」：
+    - 页面应显示配置状态（来源提示：设置值 / 构建期默认值 / 未配置）；
+    - 修改客户端 ID 后返回再进入，值应保留（输入即保存）；
+    - 随后到「添加账户 → Outlook → 获取授权」走一次设备码流，应能正常拿到短码
+      （证明拆分页面未破坏 OAuth2 链路）。

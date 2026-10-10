@@ -3,6 +3,7 @@ package com.wm.wearmail.data.repo
 import com.wm.wearmail.core.Logs
 import com.wm.wearmail.data.db.BodyDao
 import com.wm.wearmail.data.db.EmailDao
+import com.wm.wearmail.data.db.HtmlCacheState
 import com.wm.wearmail.data.db.MailDatabase
 import com.wm.wearmail.model.EmailMeta
 import kotlinx.coroutines.Dispatchers
@@ -106,9 +107,27 @@ class EmailRepositoryImpl(private val db: MailDatabase) : EmailRepository {
         bodyDao.query(emailId)
     }
 
-    override suspend fun cacheBody(emailId: Long, text: String) = withContext(Dispatchers.IO) {
-        bodyDao.insertOrReplace(emailId, text, System.currentTimeMillis())
-        Logs.d(TAG, "正文已缓存（emailId=$emailId，字符数=${text.length}）")
+    override suspend fun cachedHtml(emailId: Long): String? = withContext(Dispatchers.IO) {
+        bodyDao.queryHtml(emailId)
+    }
+
+    override suspend fun cachedHtmlState(emailId: Long): HtmlCacheState = withContext(Dispatchers.IO) {
+        bodyDao.queryHtmlState(emailId)
+    }
+
+    override suspend fun cacheBody(
+        emailId: Long,
+        text: String,
+        html: String?,
+        htmlRequested: Boolean,
+    ) = withContext(Dispatchers.IO) {
+        bodyDao.insertOrReplace(emailId, text, System.currentTimeMillis(), html, htmlRequested)
+        // 只记长度，绝不记正文内容
+        Logs.d(
+            TAG,
+            "正文已缓存（emailId=$emailId，纯文本=${text.length} 字，HTML=${html?.length ?: 0} 字，" +
+                "本次请求了 HTML=$htmlRequested）",
+        )
         bumpVersion()
     }
 

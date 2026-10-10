@@ -90,6 +90,40 @@ object CircularMetrics {
         return ((SCREEN_SIZE_PX - width) / 2f).coerceAtLeast(0f)
     }
 
+    /**
+     * 计算 LazyList 列表项的横向内边距（**含坐标系换算**）。
+     *
+     * LazyList 的 `LazyListItemInfo.offset` 以「内容区起点」（顶部 contentPadding
+     * **内侧**）为原点 —— 见 LazyListMeasure 中 `visualItemOffset = (startPadding, topPadding)`
+     * 只在最终 place 阶段叠加；而本文件的几何模型以**屏幕左上角**为原点，因此必须补上
+     * 顶部内容内边距：
+     *
+     *     屏幕 Y = 内容 Y + beforeContentPadding
+     *
+     * 真实缺陷：早期实现直接把 `offset` 当作屏幕 Y 调用 [horizontalPaddingFor]，
+     * 使「最宽处」整体下移一个顶部内边距（列表页为 30~52dp）：控件滚动到表盘中心时
+     * 并未放宽到最大宽度，最宽状态出现在中心**偏下**的位置。
+     *
+     * @param contentOffset 列表项在内容坐标系中的顶部 Y（即 `LazyListItemInfo.offset`）
+     * @param itemSize 列表项高度（即 `LazyListItemInfo.size`）
+     * @param beforeContentPadding 顶部内容内边距（即 `LazyListLayoutInfo.beforeContentPadding`）
+     */
+    fun horizontalPaddingForItem(
+        contentOffset: Int,
+        itemSize: Int,
+        beforeContentPadding: Int,
+        radius: Float = SAFE_RADIUS_PX,
+        minWidthPx: Float = 0f,
+    ): Float {
+        val top = (contentOffset + beforeContentPadding).toFloat()
+        return horizontalPaddingFor(
+            top = top,
+            bottom = top + itemSize,
+            radius = radius,
+            minWidthPx = minWidthPx,
+        )
+    }
+
     /** 判断某点是否落在安全内容圆内 */
     fun isInsideSafeCircle(
         x: Float,

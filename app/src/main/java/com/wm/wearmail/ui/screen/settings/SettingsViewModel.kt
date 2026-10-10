@@ -12,6 +12,7 @@ import com.wm.wearmail.data.prefs.SyncFrequency
 import com.wm.wearmail.model.Account
 import com.wm.wearmail.model.SyncReason
 import com.wm.wearmail.notify.NotificationDiagnostics
+import com.wm.wearmail.update.UpdateCenter
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -52,6 +53,8 @@ data class SettingsUiState(
      * 放在 UiState 里是安全的：它只含开关状态与账户名，**不含任何凭据或邮件内容**。
      */
     val notifyDiagnostics: NotificationDiagnostics? = null,
+    /** 正在检查更新（「检查更新」按钮置灰 + 文案「检查中…」；含启动自动检查） */
+    val checkingUpdate: Boolean = false,
 )
 
 /** 设置页一次性事件（振动反馈 + 顶部提示） */
@@ -113,6 +116,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 _uiState.update {
                     it.copy(syncing = syncState.running, lastSyncError = syncState.lastError)
                 }
+            }
+        }
+
+        // 检查更新状态（按钮置灰；发现新版本由根组合的弹窗统一呈现）
+        viewModelScope.launch {
+            container.updates.state.collect { updateState ->
+                _uiState.update { it.copy(checkingUpdate = updateState.checking) }
             }
         }
 
@@ -275,6 +285,55 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     // ------------------------------------------------------------------
+    // 邮件正文渲染（HTML）
+    // ------------------------------------------------------------------
+
+    /**
+     * 开关「渲染 HTML 邮件」。
+     *
+     * 说明：开启后，已缓存的纯文本正文会因为"缺少 HTML"而在下次打开详情时重新下载一次；
+     * 关闭后不再保留 HTML（新下载的正文不会写 HTML 列），但已缓存的可继续查看。
+     */
+    fun setHtmlRendering(enabled: Boolean) {
+        viewModelScope.launch {
+            val ok = runCatching {
+                container.settings.update { it.copy(htmlRenderingEnabled = enabled) }
+            }.isSuccess
+            Logs.i(TAG, "HTML 渲染开关：$enabled")
+            _events.tryEmit(
+                if (ok) {
+                    SettingsEvent.Message(
+                        if (enabled) "已开启 HTML 渲染（更耗内存）" else "已关闭 HTML 渲染",
+                        success = true,
+                    )
+                } else {
+                    SettingsEvent.Message("设置失败", false)
+                },
+            )
+        }
+    }
+
+    /** 开关「显示远程图片」（仅在 HTML 渲染开启时有意义） */
+    fun setRemoteImages(enabled: Boolean) {
+        viewModelScope.launch {
+            val ok = runCatching {
+                container.settings.update { it.copy(remoteImagesEnabled = enabled) }
+            }.isSuccess
+            Logs.i(TAG, "远程图片开关：$enabled")
+            _events.tryEmit(
+                if (ok) {
+                    SettingsEvent.Message(
+                        if (enabled) "已允许加载远程图片" else "已屏蔽远程图片",
+                        success = true,
+                    )
+                } else {
+                    SettingsEvent.Message("设置失败", false)
+                },
+            )
+        }
+    }
+
+    // ------------------------------------------------------------------
     // 通知自检与测试通知
     // ------------------------------------------------------------------
 
@@ -305,30 +364,31 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     // ------------------------------------------------------------------
-    // Outlook OAuth2（Microsoft 账号授权）
+    // 检查更新
     // ------------------------------------------------------------------
 
     /**
-     * 保存 Microsoft OAuth2 客户端 ID（Azure 应用注册的 Application ID）。
+     * 手动检查更新（设置页「关于」分组）。
      *
-     * 为什么让用户在手表上填：Azure 应用必须由使用者自己注册（没人能替他注册），
-     * 运行时填写比"改 gradle.properties 重新打包"现实得多。客户端 ID 不属于机密，
-     * 但仍只写入应用私有存储，且不写日志。
+     * 结果分流：
+     * - 发现新版本 → 已写入 [com.wm.wearmail.update.UpdateCenter] 的状态，
+     *   由根组合统一弹出「发现新版本」（与启动自动检查共用同一个弹窗）；
+     * - 已是最新 / 失败 → 顶部提示（失败同时振动）。
      */
-    fun setMicrosoftClientId(value: String) {
+    fun checkForUpdates() {
+        if (_uiState.value.checkingUpdate) return
         viewModelScope.launch {
-            runCatching {
-                container.settings.update { it.copy(microsoftOAuthClientId = value.trim()) }
-            }.onFailure { Logs.w(TAG, "保存 Microsoft 客户端 ID 失败") }
-        }
-    }
+            when (val result = container.updates.check(manual = true)) {
+                UpdateCenter.CheckResult.UpToDate ->
+                    _events.tryEmit(SettingsEvent.Message("已是最新版本", success = true))
 
-    /** 保存 Microsoft OAuth2 租户（留空表示使用 common：个人与企业账号都支持） */
-    fun setMicrosoftTenant(value: String) {
-        viewModelScope.launch {
-            runCatching {
-                container.settings.update { it.copy(microsoftOAuthTenant = value.trim()) }
-            }.onFailure { Logs.w(TAG, "保存 Microsoft 租户失败") }
+                is UpdateCenter.CheckResult.Failed ->
+                    _events.tryEmit(SettingsEvent.Message("检查更新失败：${result.reason}", success = false))
+
+                is UpdateCenter.CheckResult.UpdateAvailable -> Unit
+                // 新版本提示由「发现新版本」弹窗统一呈现（见 ui/nav/WearMailNav.kt），
+                // 这里不再重复提示，避免双重打扰
+            }
         }
     }
 

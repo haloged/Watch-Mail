@@ -78,6 +78,8 @@ class SettingsStoreImpl(context: Context) : SettingsStore {
             signature = prefs.getString(KEY_SIGNATURE, defaults.signature).orEmpty(),
             microsoftOAuthClientId = prefs.getString(KEY_MS_CLIENT_ID, defaults.microsoftOAuthClientId).orEmpty(),
             microsoftOAuthTenant = prefs.getString(KEY_MS_TENANT, defaults.microsoftOAuthTenant).orEmpty(),
+            htmlRenderingEnabled = prefs.getBoolean(KEY_HTML_RENDER, defaults.htmlRenderingEnabled),
+            remoteImagesEnabled = prefs.getBoolean(KEY_REMOTE_IMAGES, defaults.remoteImagesEnabled),
         )
     }
 
@@ -93,6 +95,8 @@ class SettingsStoreImpl(context: Context) : SettingsStore {
             .putString(KEY_SIGNATURE, settings.signature)
             .putString(KEY_MS_CLIENT_ID, settings.microsoftOAuthClientId)
             .putString(KEY_MS_TENANT, settings.microsoftOAuthTenant)
+            .putBoolean(KEY_HTML_RENDER, settings.htmlRenderingEnabled)
+            .putBoolean(KEY_REMOTE_IMAGES, settings.remoteImagesEnabled)
             .apply()
     }
 
@@ -113,6 +117,10 @@ class SettingsStoreImpl(context: Context) : SettingsStore {
         /** Microsoft OAuth2 客户端 ID / 租户（Outlook 账户授权用） */
         private const val KEY_MS_CLIENT_ID = "microsoft_oauth_client_id"
         private const val KEY_MS_TENANT = "microsoft_oauth_tenant"
+
+        /** 正文渲染：是否渲染 HTML、是否允许加载远程图片 */
+        private const val KEY_HTML_RENDER = "html_rendering_enabled"
+        private const val KEY_REMOTE_IMAGES = "remote_images_enabled"
 
         /** 被关闭通知的账户 id 集合（存字符串，Long 无 StringSet 支持） */
         private const val KEY_NOTIF_DISABLED_ACCOUNTS = "notif_disabled_accounts"

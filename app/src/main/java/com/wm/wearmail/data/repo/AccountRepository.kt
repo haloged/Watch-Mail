@@ -2,6 +2,7 @@ package com.wm.wearmail.data.repo
 
 import com.wm.wearmail.model.Account
 import com.wm.wearmail.model.AccountSecrets
+import com.wm.wearmail.model.OAuthTokens
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -30,10 +31,23 @@ interface AccountRepository {
     /**
      * 更新账户。
      *
-     * [secrets] 为 null 表示「不改动凭据」（例如用户只改了别名）。
+     * [secrets] 为 null 表示「不改动凭据」（例如用户只改了别名）——实现必须**保留**
+     * 数据库中的原密文，而不是把它写成 NULL（早期实现踩过这个坑，见
+     * [com.wm.wearmail.data.db.SecretWrite]）。
      * @return 是否更新成功（账户不存在返回 false）
      */
     suspend fun update(account: Account, secrets: AccountSecrets?): Boolean
+
+    /**
+     * 只更新 OAuth2 令牌密文，**密码列保持原值**。
+     *
+     * 为什么需要单独的方法：access token 每小时左右就要刷新一次（见
+     * [com.wm.wearmail.mail.oauth.OAuthTokenService]），若复用 [update] 并传一个
+     * 「只含 oauth 的 AccountSecrets」，密码列会被一并清空 —— 那是不可恢复的凭据丢失。
+     *
+     * @return 是否写回成功
+     */
+    suspend fun updateOAuthTokens(accountId: Long, tokens: OAuthTokens): Boolean
 
     /** 删除账户及其全部邮件/正文/草稿缓存 */
     suspend fun delete(accountId: Long): Boolean

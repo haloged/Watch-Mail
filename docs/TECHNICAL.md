@@ -14,20 +14,21 @@
 
 | 项目 | 结果 |
 |------|------|
-| 单元测试（纯 JVM，无需设备） | ✅ **221 / 221 通过**（14 个测试类） |
-| Debug APK | ✅ 构建成功，**27.76 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
-| Release APK（R8 + 资源压缩） | ✅ 构建成功，**3.35 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
-| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层等 12 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
+| 单元测试（纯 JVM，无需设备） | ✅ **265 / 265 通过**（20 个测试类） |
+| Debug APK | ✅ 构建成功，**27.73 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
+| Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.46 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
+| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层/密文列语义/缓存三态/坐标换算/R8 优化/更新链路/OAuth2 页面等 19 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
 | 测试报告 | [`dist/reports/test-summary.txt`](../dist/reports/test-summary.txt)、[`dist/reports/unit-tests/index.html`](../dist/reports/unit-tests/index.html) |
 | 真机端到端（IMAP/SMTP 实收实发、通知、表冠手感） | ⚠️ **未验证**，需真实手表，清单见 [docs/TESTING.md](TESTING.md) §7 |
 
-> 六类问题在验证过程中被发现并修复（根因与修复都记在 [docs/TESTING.md](TESTING.md) §5.3）：
+> 七类问题在验证过程中被发现并修复（根因与修复都记在 [docs/TESTING.md](TESTING.md) §5.3）：
 > ① 单元测试发现的凭据密文缺少分隔符（导致加密后无法解密）；
 > ② 真机反馈的覆盖层根节点漏画背景（详情/撰写/添加账户会透出上一页）；
 > ③ 真机反馈的扫码提交时主机留空只回一句笼统的「提交失败」；
 > ④ 真机反馈的 `InvalidAlgorithmParameterException`（Android Keystore 不允许加密时自带 IV）；
-> ⑤⑥ 两次反馈的「信息流太小」（顶部/底部固定条吃掉纵向空间，已把按钮减半）。
-> ②③④⑤⑥ 属于纯 JVM 测试覆盖不到的类型，已分别补上**静态检查规则**防回归。
+> ⑤⑥ 两次反馈的「信息流太小」（顶部/底部固定条吃掉纵向空间，已把按钮减半）；
+> ⑦ 实机反馈的表盘放大位置偏下（列表 offset 是内容坐标，算弦长前需叠加顶部内边距）。
+> ②③④⑤⑥⑦ 属于纯 JVM 测试覆盖不到的类型，已分别补上**静态检查规则**防回归。
 
 ---
 
@@ -43,15 +44,16 @@
 | 统一收件箱 | 所有账户按时间倒序合并（`observeInbox`），顶部账户筛选器 |
 | 列表项信息 | 发件人 / 主题（单行截断）/ 智能时间（今天 HH:mm、本周 周X、更早 MM/DD）/ 未读标记 / 来源账户色点 |
 | 下拉刷新 | NestedScroll 下拉手势，阈值 48dp |
-| 邮件详情 | 发件人、收件人、时间、主题、**纯文本正文**（HTML 已剥离）、可滚动 + 底部固定操作栏（回复/删除/已读） |
+| 邮件详情 | 发件人、收件人、时间、主题、**纯文本正文**（HTML 已剥离）、可滚动 + 底部固定操作栏（回复/删除/已读）；可选开启 **HTML 渲染**（见下） |
 | 撰写并发送 | 收件人（常用联系人快捷选择）、主题、正文（500 字提示）、发件账户选择；`Sending → Success(✓+振动) / Failure(✗+振动+重试)` |
 | 离线草稿 | 发送失败自动存草稿，联网后自动补投（`flushPendingDrafts`） |
-| 新邮件通知 | `NotificationCenter`：发件人 + 主题前 30 字符，点击直达详情；支持按账户关闭；设置页提供**测试通知 + 链路自检**（三层开关 + 系统权限/渠道状态会明确告诉你是哪一层拦下的） |
+| 邮件 HTML 渲染（可选） | 设置里「渲染 HTML 邮件」开关（**默认关闭**）：开启后详情页用 WebView 渲染原始 HTML，并可在「HTML / 纯文本」间切换；WebView 禁 JS、默认禁网络（屏蔽远程图片与追踪像素），HTML 先经清理；原始 HTML 缓存在 `email_bodies.body_html`（数据库 v1 → v2 迁移） |
 | IMAP 收信 | JavaMail；首次 50 封元数据、增量按 UID、IDLE 推送（支持时）、10 秒超时 |
 | SMTP 发信 | JavaMail；AUTH LOGIN/PLAIN、**XOAUTH2**、SSL/TLS/STARTTLS |
 | 断线重连 | `BackoffPolicy` 指数退避（1s→60s，±20% 抖动，区分可重试错误） |
 | 数据同步策略 | 首次仅元数据、正文按需、增量 UID/SINCE、前台 5 分钟 / 后台 15–30 分钟 / 手动 |
 | 本地缓存上限 | 元数据 500 封 + 正文 50 封，超出按 LRU 淘汰 |
+| **检查更新** | 启动时自动请求 GitHub Releases 最新版本（`haloged/Watch-Mail`）并与当前版本做语义化比较，有新版本弹出提示；设置页「关于」提供手动检查入口；请求在首帧后异步执行（不阻塞冷启动），失败静默、不影响其他功能 |
 | 圆形表盘适配 | 安全半径 210px、按 Y 坐标动态计算弦长收窄列表项、顶/底弧形区分区 |
 | 交互 | 上下滑滚动、左右滑切换页面、点击、长按菜单、表冠旋转、全操作振动反馈 |
 
@@ -72,7 +74,7 @@
 # 构建调试包
 ./gradlew assembleDebug        # 产物：app/build/outputs/apk/debug/app-debug.apk
 
-# 构建发布包（开启 R8 压缩，keep 规则见 app/proguard-rules.pro）
+# 构建发布包（R8 压缩 + 混淆 + 优化 + 资源压缩，keep 规则见 app/proguard-rules.pro）
 ./gradlew assembleRelease
 ```
 
@@ -100,7 +102,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 4. 进入「身份验证」→ 拉到底部「高级设置」→ **「允许公共客户端流」选「是」**
    （不开启的话设备码流会被直接拒绝）；
 5. 复制概览页的**「应用程序(客户端) ID」**；
-6. 手表上进入「设置 → Outlook OAuth2」，把该 ID 填进去（租户保持 `common`）；
+6. 手表上进入「设置 → Outlook OAuth2 → OAuth2 客户端 ID 配置」，把该 ID 填进去（租户保持 `common`）；
 7. 「添加账户」→ 邮箱填 Outlook 地址 → 登录方式选 **OAuth2 令牌** → 「获取授权」→
    用手机扫码（或手输网址）打开授权页、输入手表显示的短码 → 授权成功后保存。
 
@@ -135,6 +137,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 │       │       ├── sync/                      # SyncService / SyncEngine / SyncWorker
 │       │       ├── notify/                    # 通知渠道与新邮件通知
 │       │       ├── pairing/                   # 局域网 HTTP 服务 + 二维码 + 网页
+│       │       ├── update/                    # 检查更新（GitHub Releases API + 版本比较）
 │       │       ├── util/                      # 时间智能格式化
 │       │       └── ui/
 │       │           ├── theme/                 # 深色 OLED 配色
@@ -152,7 +155,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 │   └── mirrors-init.gradle            # 可选：国内 Maven 镜像加速（不改动项目配置）
 ├── dist/                              # 已验证的交付产物
 │   ├── wearmail-debug.apk             # 调试包（可直接 adb install）
-│   ├── wearmail-release.apk           # R8 压缩后的发布包
+│   ├── wearmail-release.apk           # R8 压缩+混淆+优化后的发布包
 │   └── reports/                       # 单元测试报告 + 静态检查报告
 ├── gradle/libs.versions.toml          # 版本目录
 └── keystore/debug.keystore            # 仓库内自签名调试证书（口令 android）
@@ -214,8 +217,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 1. **仅在真实手表上完成端到端验证才能确认的项**：IMAP IDLE 推送在不同服务商上的表现、
    各厂商表冠事件频率差异、通知在 Wear OS 上的实际样式。代码已按各平台文档实现并留有日志。
 2. **Outlook OAuth2 需要你自己注册 Azure 应用**：协议与刷新逻辑已完整实现（设备码流），
-   但 `clientId` 必须由使用者去 Azure 门户注册应用后填入（手表「设置 → Outlook OAuth2」，
-   或 `gradle.properties` 的 `wearmail.microsoftOAuthClientId`）—— 没人能替你注册。
+   但 `clientId` 必须由使用者去 Azure 门户注册应用后填入（手表「设置 → Outlook OAuth2 →
+   OAuth2 客户端 ID 配置」，或 `gradle.properties` 的 `wearmail.microsoftOAuthClientId`）
+   —— 没人能替你注册。
    本地无 Azure 应用与真实 Outlook 账户，因此**授权往返与 XOAUTH2 登录未经真机验证**，
    其余（响应解析、轮询状态机、刷新、存储）有 34 个单元测试覆盖。详见
    [docs/TESTING.md](TESTING.md) §5.3 与 §6。
@@ -224,8 +228,15 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 4. **附件**：列表仅用 `multipart/mixed` 启发式标记「含附件」，不下载、不展示附件内容。
 5. **文件夹管理**：IMAP 具备 `listFolders` 能力，UI 目前只使用收件箱；
    删除邮件会优先移动到 `\Trash`，否则打 `\Deleted` + EXPUNGE。
-6. `release` 构建开启了 R8 压缩，keep 规则已覆盖 JavaMail 的反射用法，但
-   未能通过真机回归验证压缩后的运行行为；如需稳妥可先关闭 `isMinifyEnabled`。
+6. `release` 构建开启了 R8 **收缩 + 混淆 + 优化**（默认规则为 `proguard-android-optimize.txt`，
+   keep 规则已覆盖 JavaMail 的反射用法），但未能通过真机回归验证压缩后的运行行为；
+   如需稳妥可先关闭 `isMinifyEnabled`。R8 是否生效的验证方式：构建后检查
+   `app/build/outputs/mapping/release/mapping.txt`（首行 `# compiler: R8`）与 `configuration.txt`
+   （可见实际生效的规则来源）。
+7. **检查更新依赖 GitHub API 的可达性**：自动/手动检查都直接请求 `api.github.com`
+   （未走镜像）；在 GitHub 访问受限的网络环境下会超时失败，表现为「检查更新失败」
+   —— 只影响该功能本身，其余功能不受影响。匿名调用的速率上限（60 次/小时）
+   对本应用的使用频率（每次启动一次）不构成问题。
 
 ## 相关文档
 
@@ -246,7 +257,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `.gradlehome/`、`.gradle-dist/`、`.gradle/`、`.kotlin/` | Gradle/Kotlin 缓存与本地解压的发行版（数百 MB） |
 | `.tmp/`、`.refsrc/`、`.androidhome/` | 构建过程临时目录 / 依赖源码解压目录 / Android 用户目录 |
 | `build/`、`app/build/` | 构建产物（每次构建都变） |
-| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（27.76 MB / 3.35 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
+| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（27.73 MB / 3.46 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
 | `*.iml`、`.idea/`、`.DS_Store`、`Thumbs.db` | IDE 与系统文件 |
 
 **可以（也应该）上传**：`app/src/**`、`gradle/wrapper/**`（含 `gradle-wrapper.jar`）、

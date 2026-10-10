@@ -67,9 +67,9 @@
 
 | 表 | 关键列 | 说明 |
 |----|--------|------|
-| `accounts` | `email` UNIQUE、`password_enc`、`oauth_token_enc` | 凭据列为**密文**（`v1:base64(iv):base64(ct)`） |
+| `accounts` | `email` UNIQUE、`password_enc`、`oauth_token_enc` | 凭据列为**密文**（`v1:base64(iv):base64(ct)`）；更新时用 `SecretWrite`（`Keep` / `Set`）显式表达「不改动 / 清空」，**不允许**用参数 null 隐含表示「不覆盖」——那会静默清空已存凭据 |
 | `emails` | `UNIQUE(account_id, folder, uid)`、`date_millis`、`is_read`、`last_access_at` | 元数据缓存；外键级联删除 |
-| `email_bodies` | `email_id` PK、`body_text`、`last_access_at` | 正文缓存，按需写入 |
+| `email_bodies` | `email_id` PK、`body_text`、`body_html`、`last_access_at` | 正文缓存，按需写入；`body_html` 为**三态**（`HtmlCacheState`）：SQL NULL = 没问过 / 空串 = 问过但没有 / 非空 = 已缓存，用于判断「是否需要为 HTML 再联网一次」 |
 | `drafts` | `account_id`、`last_error` | 离线草稿 |
 | `contacts` | `address` UNIQUE、`used_count` | 常用联系人（发件人自动累积） |
 
@@ -216,6 +216,41 @@ https://outlook.office.com/SMTP.Send               ← SMTP 发信
 JavaMail 会据此拼出 `user=<邮箱>^Aauth=Bearer <token>^A^A`。用户名必须是邮箱地址。
 `AccountSecrets.authSecret` 同时兼容「授权得到的令牌」与「用户手动粘贴的令牌」。
 
+### 4.6 邮件 HTML 渲染（可选功能，默认关闭）
+
+需求原本要求「正文只显示纯文本、HTML 一律剥离」，因此**纯文本仍是默认与基线**；
+HTML 渲染作为**用户显式开启**的增强功能存在（`AppSettings.htmlRenderingEnabled`，默认 false，
+设置页文案明确提示「更耗内存与存储，仅在性能足够的手表上开启」）。
+
+为什么默认关闭：
+
+- 渲染需要 WebView，内存占用明显高于 Compose 文本；
+- 原始 HTML 会写进正文缓存（`email_bodies.body_html`，库 v1 → v2 迁移），
+  一封营销邮件常见几十到几百 KB，在 50 封正文上限下可能多占数 MB 存储。
+  缓存完整性采用**三态**判定（`HtmlCacheState`）：只为「尚未问过 HTML」的邮件补取一次，
+  纯文本邮件不会被反复重下、离线也能打开（设计背景见 `docs/TESTING.md` §5.3 第 7 条）。
+
+**安全设计**（邮件 HTML 是不可信内容，这是本功能最关键的部分）：
+
+| 措施 | 目的 |
+|------|------|
+| `javaScriptEnabled = false` | 不执行任何脚本 |
+| `blockNetworkLoads = true`（默认） | 远程图片 / 追踪像素 / 外部样式一律不加载；仅在用户显式打开「显示远程图片」时放行 |
+| 清理 `<script>` / `<iframe>` / `<meta http-equiv="refresh">` / `javascript:` 伪协议 | 去掉**无需 JS 也能生效**的攻击面（meta refresh 可跳转、iframe 可加载外部内容） |
+| 关闭 `allowFileAccess` / `allowContentAccess` | 防止 `file://` / `content://` 读取本机数据 |
+| 链接点击一律拦截（`shouldOverrideUrlLoading` 返回 true） | 手表上没有浏览器，避免用户困在 WebView 中 |
+| 离开页面 `destroy()` | WebView 持有原生资源，不销毁会在手表上泄漏内存 |
+
+**适配**：WebView 全屏铺满，圆屏安全边距由文档自身的 CSS 提供
+（`body { padding: 78px 20px 92px }`：上让出返回按钮、下让出底部操作栏、左右避免被圆弧切到），
+这样正文可以像列表一样「滚过」上下弧形区，而不是被裁掉一截。
+
+**投递链路**：`ImapClient.fetchBodyDetailed(keepHtml = true)` **一次 IMAP 抓取**同时得到纯文本与
+原始 HTML（不为 HTML 再多连一次服务器）；HTML 超过 `EmailHtmlDocument.MAX_HTML_CHARS`（200k 字符）时
+**整体丢弃**只留纯文本，而不是截断成残缺文档。用户开启开关后，已缓存的纯文本会因
+「缓存缺少 HTML」而在下次打开详情时重新下载一次 —— 该判定集中在 `SyncEngine.loadBody`，
+避免每个调用点各写一遍。
+
 ## 5. 性能与功耗
 
 | 目标 | 措施 |
@@ -227,9 +262,9 @@ JavaMail 会据此拼出 `user=<邮箱>^Aauth=Bearer <token>^A^A`。用户名必
 | 功耗 | 后台同步交给 WorkManager（系统统一调度，≥15 分钟）；前台同步随界面可见性启停；Wi-Fi 可选约束；IDLE 仅在支持时启用 |
 | 网络耗时 | JavaMail 超时属性显式设置；`Dispatchers.IO` 承载所有阻塞 IO |
 
-> **实测数据（本机构建验证）**：debug APK **27.76 MB**；release APK 经 R8 压缩 + 资源压缩后
-> **3.35 MB**（体积下降 88%，对 512MB–1GB 内存的手表更友好）；
-> 211 个单元测试总耗时约 **0.7 秒**（纯 JVM，无需设备）。
+> **实测数据（本机构建验证）**：debug APK **27.73 MB**；release APK 经 R8 压缩+混淆+优化 + 资源压缩后
+> **3.46 MB**（体积下降 88%，对 512MB–1GB 内存的手表更友好）；
+> 265 个单元测试用例耗时合计约 **0.5 秒**（纯 JVM，无需设备）。
 > 冷启动耗时、列表帧率、同步耗时、内存峰值需真机 Profiler 验证，见 `docs/TESTING.md` §6。
 
 ## 6. 关键设计取舍

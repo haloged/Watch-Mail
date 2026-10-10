@@ -28,6 +28,14 @@ data class RemoteMail(
 )
 
 /**
+ * 一次抓取得到的正文：纯文本始终有，HTML 仅在调用方要求且未超上限时非空。
+ */
+data class FetchedBody(
+    val plainText: String,
+    val html: String? = null,
+)
+
+/**
  * IMAP 收件客户端。
  *
  * 实现要求（见 docs/ARCHITECTURE.md）：
@@ -90,6 +98,21 @@ interface ImapClient {
         folder: String,
         uid: Long,
     ): Result<String>
+
+    /**
+     * 下载正文的**两种形态**（一次 IMAP 抓取，避免为 HTML 再连一次服务器）。
+     *
+     * @param keepHtml 是否保留原始 HTML：设置里「渲染 HTML 邮件」开启时才为 true。
+     *   HTML 超过 [EmailHtmlDocument.MAX_HTML_CHARS] 时**整体丢弃**（返回 null），
+     *   而不是截断成残缺文档 —— 手表存储与内存都经不起一封 1MB 的营销邮件。
+     */
+    suspend fun fetchBodyDetailed(
+        account: Account,
+        secrets: AccountSecrets,
+        folder: String,
+        uid: Long,
+        keepHtml: Boolean,
+    ): Result<FetchedBody>
 
     /** 设置/清除 `\Seen` 标记 */
     suspend fun setSeen(

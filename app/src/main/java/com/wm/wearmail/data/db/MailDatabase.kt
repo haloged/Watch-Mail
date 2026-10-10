@@ -48,8 +48,16 @@ class MailDatabase(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // v1 为初始版本，暂无迁移路径；后续版本必须在此逐版本增量迁移，禁止 drop 数据。
-        Logs.w(TAG, "数据库升级 $oldVersion -> $newVersion：暂无迁移脚本，保持现有结构")
+        // 逐版本增量迁移，禁止 drop 数据。
+        if (oldVersion < 2) {
+            // v2：正文缓存新增原始 HTML 列。
+            // 仅在用户开启「渲染 HTML 邮件」后才会写入；老库补一列即可，历史数据不受影响。
+            db.execSQL("ALTER TABLE ${BodiesTable.NAME} ADD COLUMN ${BodiesTable.BODY_HTML} TEXT")
+            Logs.i(TAG, "迁移 v1 → v2：email_bodies 新增 ${BodiesTable.BODY_HTML} 列")
+        }
+        if (oldVersion > newVersion) {
+            Logs.w(TAG, "数据库版本回退 $oldVersion -> $newVersion（不清库，仅记录）")
+        }
     }
 
     // ------------------------------------------------------------------
@@ -85,7 +93,7 @@ class MailDatabase(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
         const val DB_NAME: String = "wearmail.db"
 
         /** 数据库版本：结构变更时必须 +1 并在 [onUpgrade] 中补迁移 */
-        const val DB_VERSION: Int = 1
+        const val DB_VERSION: Int = 2
 
         /** 全部索引：字段与排序方向严格对应需求中的列表排序与 LRU 淘汰 */
         private val INDEX_SQL: List<String> = listOf(
@@ -204,13 +212,21 @@ object EmailsTable {
     """.trimIndent()
 }
 
-/** 表 `email_bodies`：正文缓存（纯文本），按需下载、LRU 淘汰 */
+/** 表 `email_bodies`：正文缓存（纯文本 + 可选原始 HTML），按需下载、LRU 淘汰 */
 object BodiesTable {
     const val NAME = "email_bodies"
     const val EMAIL_ID = "email_id"
     const val BODY_TEXT = "body_text"
     const val DOWNLOADED_AT = "downloaded_at"
     const val LAST_ACCESS_AT = "last_access_at"
+
+    /**
+     * 原始 HTML 正文（v2 新增，可空）。
+     *
+     * 为空表示该邮件没有 HTML 正文、或用户未开启「渲染 HTML 邮件」、或 HTML 超过保留上限。
+     * 与 [BODY_TEXT] 一起在 LRU 淘汰时删除，不额外占用缓存配额。
+     */
+    const val BODY_HTML = "body_html"
 
     /** 正文字符数：淘汰统计与设置页展示用，避免为了计数读取大文本 */
     const val SIZE_CHARS = "size_chars"
@@ -219,6 +235,7 @@ object BodiesTable {
         CREATE TABLE IF NOT EXISTS $NAME (
             $EMAIL_ID INTEGER PRIMARY KEY,
             $BODY_TEXT TEXT NOT NULL,
+            $BODY_HTML TEXT,
             $DOWNLOADED_AT INTEGER NOT NULL,
             $LAST_ACCESS_AT INTEGER NOT NULL DEFAULT 0,
             $SIZE_CHARS INTEGER NOT NULL DEFAULT 0,

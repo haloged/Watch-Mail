@@ -245,10 +245,25 @@ class SyncEngine(private val container: AppContainer) : SyncService {
     // ------------------------------------------------------------------
 
     override suspend fun loadBody(emailId: Long): Result<String> {
-        // 1) 本地缓存优先：离线也能看已下载过的正文
+        // 用户是否开启 HTML 渲染（性能足够的手表才建议开启）：决定是否需要保留原始 HTML
+        val wantHtml = runCatching {
+            container.settings.settings.value.htmlRenderingEnabled
+        }.getOrDefault(false)
+
+        // 1) 本地缓存优先：离线也能看已下载过的正文。
+        //    「缓存完整」的判定要带上 HTML 三态（见 HtmlCacheState）：
+        //    - UNKNOWN：没问过服务器，开启 HTML 渲染后应补取一次（否则开关看起来没生效）；
+        //    - NONE：问过了，这封邮件本来就没有可渲染的 HTML——不能重下，否则纯文本邮件
+        //      会被反复判定为「不完整」，既白耗流量又永远无法离线打开。
+        var cachedText: String? = null
         try {
             val cached = container.emails.cachedBody(emailId)
-            if (cached != null) return Result.success(cached)
+            if (cached != null) {
+                cachedText = cached
+                val htmlReady = !wantHtml || container.emails.cachedHtmlState(emailId).resolved
+                if (htmlReady) return Result.success(cached)
+                Logs.d(TAG, "正文缓存缺少 HTML，将重新下载：emailId=$emailId")
+            }
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (t: Throwable) {
@@ -256,7 +271,8 @@ class SyncEngine(private val container: AppContainer) : SyncService {
         }
 
         if (!isNetworkAvailable()) {
-            return Result.failure(MailError.offline())
+            // 离线时宁可降级显示已缓存的纯文本（可能缺 HTML），也好过完全打不开
+            return cachedText?.let { Result.success(it) } ?: Result.failure(MailError.offline())
         }
 
         return try {
@@ -266,16 +282,20 @@ class SyncEngine(private val container: AppContainer) : SyncService {
                 ?: return Result.failure(MailError.Config("账户不存在，请重新配置"))
 
             val body = withOAuthRetry(account) { secrets ->
-                container.imap.fetchBody(account, secrets, meta.folder, meta.uid)
+                container.imap.fetchBodyDetailed(account, secrets, meta.folder, meta.uid, keepHtml = wantHtml)
             }
-            // 下载成功立即写入缓存，后续离线可读
-            body.onSuccess { text -> container.emails.cacheBody(emailId, text) }
+            // 下载成功立即写入缓存，后续离线可读（HTML 超过保留上限时 fetched.html 为 null）。
+            // htmlRequested 传 wantHtml：让缓存记下「HTML 是没问过，还是问过但没有」，
+            // 避免下次再为不存在的 HTML 重新下载正文。
+            body.onSuccess { fetched ->
+                container.emails.cacheBody(emailId, fetched.plainText, fetched.html, htmlRequested = wantHtml)
+            }
             if (body.isFailure) {
                 val error = body.exceptionOrNull()?.toMailError("正文下载失败")
                     ?: MailError.Unknown("正文下载失败")
                 Logs.w(TAG, "正文下载失败：emailId=$emailId uid=${meta.uid} ${error.userMessage}")
             }
-            body
+            body.map { it.plainText }
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (t: Throwable) {

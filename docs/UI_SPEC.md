@@ -27,6 +27,13 @@
 在高度 `y` 处，圆内可用水平宽度（弦长）为 `2·√(r² − (y−233)²)`。
 **安全区半径 210px 是本项目的列表收窄依据**；最右列即该项需要留出的单侧水平内边距。
 
+> **坐标系约定（算弦长前必须换算）**：上表的 `y` 一律指**屏幕绝对 Y**（原点在屏幕左上角）。
+> 但 LazyList 的 `LazyListItemInfo.offset` 以**内容区起点**（顶部 `contentPadding` 内侧）为原点，
+> 两者相差一个 `beforeContentPadding`：`屏幕 Y = 列表 offset + beforeContentPadding`。
+> 该换算由 `CircularMetrics.horizontalPaddingForItem` 统一完成 ——
+> 直接把 `offset` 当屏幕 Y 用，会让「最宽处」整体下移一个顶部内边距（列表页 30~52dp），
+> 表现为控件滚到表盘中心时仍未放大到最宽（真实缺陷案例见 [TESTING.md](TESTING.md) §5.3 的（8））。
+
 | y (px) | 距圆心 (px) | 安全区弦长 (r=210) | 物理圆弦长 (r=233) | 单侧内边距 |
 |-------:|-----------:|------------------:|------------------:|----------:|
 | 23 | 210 | 0.0 | 201.9 | 233.0 |
@@ -73,7 +80,7 @@
 | 分区 | 收件箱实际占用 | 实现方式 |
 |------|--------------|----------|
 | ① 顶部弧形 | 0 – 168 px（0 – 84dp） | `TimeText` 弧形文字 + 账户筛选胶囊（48dp）；列表 `contentPadding.top = 84.dp` |
-| ② 中部安全区 | 168 – 382 px（84 – 191dp） | **信息流主体**；每项宽度由 `CircularItem` 按弦长动态收窄 |
+| ② 中部安全区 | 168 – 382 px（84 – 191dp） | **信息流主体**；每项宽度由 `CircularItem` 按弦长动态收窄（屏幕坐标 = 列表 offset + 顶部内边距，见 §2 坐标系约定） |
 | ③ 底部弧形 | 382 – 466 px（191 – 233dp） | 紧凑主按钮「新建邮件」（48dp、内容宽度）+ 底边距 26dp；列表 `contentPadding.bottom = 84.dp` |
 
 ### 3.1 纵向预算（信息流空间为什么这么设计）
@@ -150,6 +157,8 @@ Wear Material3 的 `Button` 容器高 **52dp 且占满整行**（`FilledButtonTo
   用 `FlowRow` 换行 —— 这是消除「一列大按钮」的关键。
 - 效果：添加账户页的「5 个服务商 + 3 种登录方式」由 8 条整行胶囊（约 416dp 高）
   变为 2 个换行选项组（约 250dp 高），纵向占用减少约 40%，且视觉上不再是整行巨条。
+- 例外：选中 Outlook 预设时，登录方式选项组**只保留 OAuth2 一项**并自动选中
+  （微软已停用 IMAP/SMTP 基本认证；策略在 `ProviderPresets.authTypesFor`，见 §5.2）。
 - **迷你件（本轮新增）**：`MiniActionButton` / `MiniOptionButton` 高度固定 **24dp**，
   用 `clip(CircleShape) + background + clickable` 自绘 —— 之所以不用 `CompactButton`，
   是因为它内部固定 48dp 高（`CompactButtonDefaults.Height`），外部压高度只会裁切内容。
@@ -159,7 +168,7 @@ Wear Material3 的 `Button` 容器高 **52dp 且占满整行**（`FilledButtonTo
 
 ### 4.2 覆盖层规范（背景不透明 + 拦截指针事件）
 
-详情 / 撰写 / 添加账户是画在顶部分页**之上**的覆盖层（`OverlayRoute`），
+详情 / 撰写 / 添加账户 / Outlook OAuth2 配置是画在顶部分页**之上**的覆盖层（`OverlayRoute`），
 它们与分页是同一个 `Box` 的兄弟节点。由此有两条硬性要求：
 
 1. **根节点必须自己绘制不透明背景**。
@@ -224,9 +233,10 @@ Wear Material3 的 `Button` 容器高 **52dp 且占满整行**（`FilledButtonTo
 
 | 步骤 | 内容 | 控件 |
 |------|------|------|
+| 置顶（全步骤可见） | **手机扫码配置入口**（标题正下方，无需翻表单） | 紧凑胶囊 + 说明文字（展开扫码对话框） |
 | 1/3 邮箱 | 邮箱地址、别名、密码/授权码、服务商预设 | `WearTextField`（Email 键盘 / Password 键盘）+ 预设按钮组 |
 | 2/3 服务器 | IMAP 主机/端口/加密、SMTP 主机/端口/加密；「自动探测」 | `WearTextField`（Number 键盘）+ 加密方式按钮组 |
-| 3/3 验证 | 「验证连接」「保存账户」；**手机扫码配置入口** | 按钮 + 二维码展示 |
+| 3/3 验证 | 「验证连接」「保存账户」 | 按钮 + 二维码展示 |
 
 扫码配对子界面：
 
@@ -246,7 +256,8 @@ Wear Material3 的 `Button` 容器高 **52dp 且占满整行**（`FilledButtonTo
 - 离开页面 `DisposableEffect.onDispose` 立即关闭本地 HTTP 服务并释放端口；
 - 未连接 Wi-Fi 时显示「未连接 Wi-Fi，无法扫码配对」，并引导手动填写。
 
-OAuth2（Outlook）授权面板 —— 步骤 1 选中「OAuth2 令牌」时，**替换**「密码 / 授权码」输入框：
+OAuth2（Outlook）授权面板 —— 步骤 1 的登录方式为 OAuth2 时，**替换**「密码 / 授权码」输入框。
+选中 Outlook 预设会自动把登录方式**锁定为 OAuth2**（该预设下选项组只显示 OAuth2 一项）：
 
 ```
    ┌──────────────────────────┐
@@ -307,6 +318,8 @@ OAuth2（Outlook）授权面板 —— 步骤 1 选中「OAuth2 令牌」时，*
 交互：
 - **上下滑动**：滚动列表（表冠同样生效）；
 - **下拉刷新**：基于 NestedScroll 的下拉手势，超过 48dp 阈值触发 `syncAll(MANUAL)`；
+  仅在列表已滚到顶部时生效——列表未在顶部时向下拖动是正常的回滚手势，
+  刷新逻辑不拦截（否则中途想回看上面的邮件会被误触发同步）；
 - **点击**：进入邮件详情；
 - **长按**：弹出操作菜单（标记已读/未读、标星、删除），删除二次确认；
 - **左滑 / 右滑**：切换顶层页面（见 §6）。
@@ -331,10 +344,15 @@ OAuth2（Outlook）授权面板 —— 步骤 1 选中「OAuth2 令牌」时，*
 |------|------|
 | 头部 | 发件人（`bodyMedium`）、收件人（`labelSmall`，逗号分隔、截断）、`TimeFormat.fullTime` |
 | 主题 | 最多 2 行，超出省略 |
-| 正文 | 纯文本（HTML 已在协议层剥离）；`softWrap`，可上下滚动；加载中显示 `LoadingIndicator`，失败显示 `ErrorBanner` + 重试 |
-| 底部操作栏 | 固定不滚动：回复（`WearIcons.Reply`）、删除（二次确认，成功后返回）、标记已读/未读 |
+| 正文 | **默认**纯文本（HTML 已在协议层剥离）；`softWrap`，可上下滚动；加载中显示 `LoadingIndicator`，失败显示 `ErrorBanner` + 重试 |
+| 正文（HTML 模式，可选） | 仅当设置开启「渲染 HTML 邮件」且取到 HTML 时可用：`WebView` **全屏铺满**，圆屏安全边距由文档自身 CSS 提供（上 78px / 左右 20px / 下 92px），正文可滚过上下弧形区。右上角（与返回按钮对称、同样在安全圆内）显示 **「HTML / 纯文本」迷你胶囊**用于切换；默认进入 HTML 模式 |
+| 底部操作栏 | 固定不滚动：回复（`WearIcons.Reply`）、删除（二次确认，成功后返回）、标记已读/未读。**HTML 模式下仍然可用**（叠在 WebView 之上） |
 
 进入页面即标记已读（本地立即生效 + 后台同步远端）；邮件已被删除时显示空态并返回。
+
+> HTML 模式的安全约束（禁 JS、默认禁网络、链接拦截、清理不可信片段）见
+> [ARCHITECTURE.md](ARCHITECTURE.md) §4.6；正文可见高度比纯文本模式略小（上下要给返回按钮与
+> 操作栏让位），这是 466px 圆屏上「保留操作栏」与「给正文让位」之间的取舍。
 
 ### 5.5 撰写邮件（ComposeMailScreen）
 
@@ -363,18 +381,46 @@ OAuth2（Outlook）授权面板 —— 步骤 1 选中「OAuth2 令牌」时，*
 | 同步 | 仅 Wi-Fi 下同步 | `SwitchButton` |
 | 通知 | 全局通知开关 | `SwitchButton` |
 | 通知 | 按账户通知开关 | 每账户一个 `SwitchButton` |
-| Outlook OAuth2 | 客户端 ID（Application ID） | `WearTextField`（单行） |
-| Outlook OAuth2 | 租户（默认 `common`） | `WearTextField`（单行） |
-| Outlook OAuth2 | Azure 应用注册步骤说明 | 文本（`labelSmall`，居中） |
+| 通知 | 通知自检结论 + 「测试通知」 | 文本 + `SecondaryActionButton` |
+| 邮件正文 | 「渲染 HTML 邮件」开关（默认关） | `SwitchButton`（副标题：更耗内存与存储） |
+| 邮件正文 | 「显示远程图片」开关（仅 HTML 开启时出现） | `SwitchButton`（副标题：可能被用于追踪已读） |
+| Outlook OAuth2 | 入口按钮「OAuth2 客户端 ID 配置」（输入框已独立成页，见 §5.7） | `SecondaryActionButton` |
 | 存储 | 邮件元数据 / 正文缓存数量 | 文本 + 「清理缓存」按钮（二次确认） |
-| 关于 | 应用名、版本、圆屏适配说明、加密存储说明 | 文本 |
+| 关于 | 应用名、版本、**「检查更新」按钮**、圆屏适配说明、加密存储说明 | 文本 + `SecondaryActionButton` |
+
+**检查更新**（新增）：
+
+- **启动自动检查**：应用首帧渲染后异步请求 GitHub Releases（`haloged/Watch-Mail`），
+  发现新版本时弹出「发现新版本 vX」对话框 —— 不阻塞冷启动、失败静默；
+- **设置页手动检查**：「关于」分组内的按钮，检查中置灰显示「检查中…」；
+  结果分流：发现新版本 → 同一弹窗；已是最新 / 失败 → 顶部提示；
+- **弹窗行为**：「前往下载」尝试用系统浏览器打开 Release 页；手表上没有浏览器时
+  **原地降级**为手动指引（展示 GitHub 地址），按钮切换为「知道了」；「稍后」关闭
+  本次提示（下次启动仍会提示，设置页可随时手动再查）。
+
+### 5.7 Outlook OAuth2 配置（OAuth2ConfigScreen，覆盖层）
+
+从设置页「Outlook OAuth2 → OAuth2 客户端 ID 配置」进入的二级页面
+（`OverlayRoute.OAuth2Config`）。**输入即保存**，无需保存按钮。
+
+| 部分 | 内容 | 控件 |
+|------|------|------|
+| 标题 | 返回按钮 + 「Outlook OAuth2」 | `IconButton` + `Text`（titleMedium） |
+| 状态 | 配置状态提示（设置值 > 构建期默认值 > 未配置） | 文本（`labelSmall`，已配置=主色 / 未配置=错误色） |
+| 客户端 ID | 客户端 ID（Application ID）输入框 | `WearTextField`（单行） |
+| 租户 | 租户输入框（默认 `common`） | `WearTextField`（单行） |
+| 指引 | Azure 应用注册步骤说明 + 「输入后自动保存」 | 文本（`labelSmall`，居中） |
+
+取值优先级：此处填写的值 > `gradle.properties: wearmail.microsoftOAuthClientId`
+（构建期注入的默认值）。客户端 ID 不属于机密（公开客户端 + 设备码流，
+无客户端密码），但仍只写入应用私有存储，且不写日志。
 
 ## 6. 手势与输入映射
 
 | 输入 | 行为 | 实现 |
 |------|------|------|
 | 上下滑动 | 滚动当前列表 | `LazyColumn` |
-| 下拉（列表已在顶部） | 刷新邮件 | `NestedScrollConnection`，阈值 48dp |
+| 下拉（列表已在顶部） | 刷新邮件 | `NestedScrollConnection`（列表未在顶部时不拦截），阈值 48dp |
 | 左滑（顶层页） | 收件箱 → **账户管理** | `HorizontalPager` +1 页 |
 | 右滑（顶层页） | 收件箱 → **设置** | `HorizontalPager` −1 页 |
 | 点击 | 进入详情 / 执行操作 | `Card(onClick)` |
@@ -398,7 +444,7 @@ OAuth2（Outlook）授权面板 —— 步骤 1 选中「OAuth2 令牌」时，*
 | 需求 | 实现位置 |
 |------|----------|
 | 1.2 安全内容区 ≤ 210px | `CircularMetrics.SAFE_RADIUS_PX` |
-| 1.2 列表项按 Y 动态计算弦长 | `CircularMetrics.availableWidthFor` + `CircularItem` |
+| 1.2 列表项按 Y 动态计算弦长 | `CircularMetrics.availableWidthFor` + `horizontalPaddingForItem`（内容坐标→屏幕坐标换算）+ `CircularItem` |
 | 1.2 顶/底弧形放状态栏与操作按钮 | `CircularScreen` + 列表 `contentPadding`（52/56dp） |
 | 1.2 触控热区 ≥ 48×48px | `Modifier.heightIn(min = 48.dp)` + `CircularMetricsTest` |
 | 1.2 字号 ≥ 14px | Wear Typography 下限 `bodySmall`/`labelMedium` + 显式 `fontSize` 覆盖 |

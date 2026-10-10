@@ -1,5 +1,8 @@
 package com.wm.wearmail.ui.screen.detail
 
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,11 +30,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.wear.compose.material3.FilledIconButton
@@ -40,6 +46,7 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.wm.wearmail.core.AppContainer
 import com.wm.wearmail.core.RotaryBus
+import com.wm.wearmail.mail.EmailHtmlDocument
 import com.wm.wearmail.model.EmailMeta
 import com.wm.wearmail.ui.kit.CircularItem
 import com.wm.wearmail.ui.kit.CircularSafeLazyColumn
@@ -48,6 +55,7 @@ import com.wm.wearmail.ui.kit.ConfirmDialog
 import com.wm.wearmail.ui.kit.EmptyState
 import com.wm.wearmail.ui.kit.ErrorBanner
 import com.wm.wearmail.ui.kit.LoadingIndicator
+import com.wm.wearmail.ui.kit.MiniOptionButton
 import com.wm.wearmail.ui.kit.WearIcons
 import com.wm.wearmail.ui.kit.rememberHaptics
 import com.wm.wearmail.util.TimeFormat
@@ -62,7 +70,8 @@ import com.wm.wearmail.util.TimeFormat
  *  底部固定操作栏（不随正文滚动）：回复 · 删除 · 已读未读
  * ```
  *
- * 正文为协议层剥离后的**纯文本**，不做 HTML 渲染，保证手表端渲染开销最小。
+ * 正文默认是协议层剥离后的**纯文本**（渲染开销最小）；设置里开启「渲染 HTML 邮件」且这封
+ * 邮件确实带 HTML 时，右上角会出现「HTML / 纯文本」胶囊，默认按 HTML 渲染（见 [HtmlBodyView]）。
  *
  * @param onReply 回复回调，参数为收件人地址与预填主题（`Re: 原主题`）
  */
@@ -136,12 +145,44 @@ fun EmailDetailScreen(
             }
 
             mail != null -> {
-                DetailMessageList(
-                    uiState = uiState,
-                    listState = listState,
-                    onRetryBody = { vm.retryLoadBody() },
-                    rotaryBus = rotaryBus,
-                )
+                // 正文渲染模式：仅当设置里开启「渲染 HTML 邮件」且确实取到了 HTML 时才有得选。
+                // 默认（设置关闭）走完全不变的纯文本列表。
+                val canRenderHtml = EmailHtmlDocument.isRenderable(uiState.htmlEnabled, uiState.html)
+                // 首帧的 uiState 仍是初始值（HTML 往往还在加载），因此**不能**用 remember 的初值
+                // 把模式锁死 —— 那会让「渲染 HTML 邮件」开关看起来没生效，必须手点一次胶囊。
+                // 改为：用户没手动选过（null）时始终跟随可用性，HTML 一到就自动渲染。
+                var htmlUserChoice by remember(emailId) { mutableStateOf<Boolean?>(null) }
+                val htmlMode = htmlUserChoice ?: canRenderHtml
+
+                if (canRenderHtml && htmlMode) {
+                    HtmlBodyView(
+                        html = uiState.html.orEmpty(),
+                        allowRemoteImages = uiState.remoteImagesEnabled,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    DetailMessageList(
+                        uiState = uiState,
+                        listState = listState,
+                        onRetryBody = { vm.retryLoadBody() },
+                        rotaryBus = rotaryBus,
+                    )
+                }
+
+                // HTML 模式下的切换胶囊：放在右上角（返回按钮的镜像位置，同样在安全圆内）
+                if (canRenderHtml) {
+                    MiniOptionButton(
+                        text = if (htmlMode) "HTML" else "纯文本",
+                        selected = htmlMode,
+                        onClick = {
+                            haptics.tick()
+                            htmlUserChoice = !htmlMode
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = HTML_TOGGLE_PADDING, end = HTML_TOGGLE_PADDING),
+                    )
+                }
 
                 // ---------------- 底部固定操作栏 ----------------
                 // 外层加「透明 → 表盘底色」的竖向渐变遮罩：
@@ -489,6 +530,75 @@ private val ACTION_BAR_BOTTOM_PADDING = 42.dp
 
 /** 操作栏渐变遮罩高度（操作栏 48dp + 下边距 42dp + 渐隐余量） */
 private val ACTION_BAR_SCRIM_HEIGHT = 96.dp
+
+/** 「HTML / 纯文本」切换胶囊的位置：与返回按钮同一安全位置（右上角镜像，仍在安全圆内） */
+private val HTML_TOGGLE_PADDING = 46.dp
+
+/**
+ * HTML 正文视图（仅在设置开启「渲染 HTML 邮件」且取到 HTML 时使用）。
+ *
+ * 邮件 HTML 来自外部，是**不可信内容**，因此这里的每一条设置都是安全默认值：
+ * - `javaScriptEnabled = false`：不执行任何脚本；
+ * - `blockNetworkLoads = true`（默认）：远程图片、追踪像素、外部样式一概不加载，
+ *   仅在设置里显式打开「显示远程图片」时才放行；
+ * - 关闭文件与内容访问；链接点击一律拦截（手表上没有浏览器，跳出去会让用户困住）；
+ * - HTML 先经 [EmailHtmlDocument] 清理（脚本 / iframe / meta refresh / `javascript:` 伪协议）
+ *   并注入适配圆屏的样式。
+ *
+ * 为什么全屏铺满而不是像列表那样由 Compose 留边：圆屏安全边距由文档自身的 CSS padding 提供
+ * （见 [EmailHtmlDocument]），这样正文可以像列表一样「滚过」上下弧形区，而不是被裁掉一截。
+ *
+ * 生命周期：WebView 持有原生资源，离开页面**必须** `destroy()`，否则手表内存吃紧。
+ */
+@Composable
+private fun HtmlBodyView(
+    html: String,
+    allowRemoteImages: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val document = remember(html, allowRemoteImages) {
+        EmailHtmlDocument.build(html, allowRemoteImages = allowRemoteImages)
+    }
+
+    val webView = remember {
+        WebView(context).apply {
+            settings.javaScriptEnabled = false
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.setSupportZoom(false)
+            settings.builtInZoomControls = false
+            settings.defaultTextEncodingName = "utf-8"
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+            setBackgroundColor(android.graphics.Color.BLACK)
+            // 链接一律不跳转（含 shouldOverrideUrlLoading 的新旧重载）
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): Boolean = true
+            }
+        }
+    }
+
+    // blockNetworkLoads 只在加载前生效，因此切换「显示远程图片」时重新加载文档
+    LaunchedEffect(document, allowRemoteImages) {
+        webView.settings.blockNetworkLoads = !allowRemoteImages
+        webView.loadDataWithBaseURL(null, document, "text/html", "utf-8", null)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching {
+                webView.stopLoading()
+                webView.destroy()
+            }
+        }
+    }
+
+    AndroidView(factory = { webView }, modifier = modifier)
+}
 
 /** 正文切块字符数：控制单个列表项高度，避免圆形安全区把长文本压扁 */
 private const val BODY_CHUNK_CHARS = 220
