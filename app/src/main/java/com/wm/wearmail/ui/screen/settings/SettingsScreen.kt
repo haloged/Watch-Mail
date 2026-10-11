@@ -40,6 +40,7 @@ import com.wm.wearmail.ui.kit.LoadingIndicator
 import com.wm.wearmail.ui.kit.PrimaryActionButton
 import com.wm.wearmail.ui.kit.SectionHeader
 import com.wm.wearmail.ui.kit.SecondaryActionButton
+import com.wm.wearmail.ui.kit.ToastHost
 import com.wm.wearmail.ui.kit.WearIcons
 import com.wm.wearmail.ui.kit.rememberHaptics
 
@@ -65,7 +66,8 @@ fun SettingsScreen(
     val haptics = rememberHaptics()
     val listState = rememberLazyListState()
 
-    // 顶部一次性提示
+    // 一次性提示（由页面末尾的 ToastHost 以浮层展示：
+    // 设置页很长，提示若跟随滚动位置会出现「看不到回应」的情况）
     var message by remember { mutableStateOf<String?>(null) }
     // 清理缓存二次确认
     var confirmClear by remember { mutableStateOf(false) }
@@ -104,17 +106,6 @@ fun SettingsScreen(
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                     )
-                    message?.let { text ->
-                        Text(
-                            text = text,
-                            modifier = Modifier.fillMaxWidth(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
                 }
             }
 
@@ -413,12 +404,13 @@ fun SettingsScreen(
                             vm.checkForUpdates()
                         },
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    InfoLine(text = "已适配 466×466 圆形表盘，列表按弦长自动收窄")
-                    InfoLine(text = "邮箱密码使用 Android Keystore AES-256-GCM 加密存储")
                 }
             }
         }
+
+        // 交互反馈浮层：任何操作（同步、清理缓存、检查更新）的回应都浮在最上层，
+        // 与按钮位置无关 —— 例如「检查更新」在列表底部，旧的标题下提示根本看不到
+        ToastHost(message = message, onDismiss = { message = null })
     }
 
     ConfirmDialog(

@@ -14,10 +14,10 @@
 
 | 项目 | 结果 |
 |------|------|
-| 单元测试（纯 JVM，无需设备） | ✅ **265 / 265 通过**（20 个测试类） |
-| Debug APK | ✅ 构建成功，**27.73 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
-| Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.46 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
-| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层/密文列语义/缓存三态/坐标换算/R8 优化/更新链路/OAuth2 页面等 19 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
+| 单元测试（纯 JVM，无需设备） | ✅ **273 / 273 通过**（21 个测试类） |
+| Debug APK | ✅ 构建成功，**27.75 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
+| Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.48 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
+| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层/密文列语义/缓存三态/坐标换算/R8 优化/更新链路/OAuth2 页面/扫码拦截/Wi-Fi 前置/浮层提示等 22 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
 | 测试报告 | [`dist/reports/test-summary.txt`](../dist/reports/test-summary.txt)、[`dist/reports/unit-tests/index.html`](../dist/reports/unit-tests/index.html) |
 | 真机端到端（IMAP/SMTP 实收实发、通知、表冠手感） | ⚠️ **未验证**，需真实手表，清单见 [docs/TESTING.md](TESTING.md) §7 |
 
@@ -39,7 +39,7 @@
 | 多邮箱账户（≥5 个流畅） | `AccountRepository` + 账户列表页；Gmail / Outlook / QQ / 163 / 企业邮箱预设（`ProviderPresets`） |
 | 账户字段齐全 | 邮箱、密码/应用专用密码/**OAuth2 令牌**、IMAP/SMTP 主机端口、SSL/TLS/STARTTLS、账户别名 |
 | **Outlook OAuth2（完整实现）** | 设备码授权流：手表显示短码 + 二维码 → 手机浏览器登录 → 手表轮询取令牌；access token 到期前自动用 refresh token 续期；微软已停用 IMAP/SMTP 基础认证，Outlook/Office 365 **必须**走这条路径 |
-| **手机扫码配置** | 手表开启本地 HTTP 服务 → 表盘显示二维码 → 同 Wi-Fi 手机扫码填写 → 加密保存 |
+| **手机扫码配置** | 手表开启本地 HTTP 服务 → 表盘显示二维码 → 同 Wi-Fi 手机扫码填写 → 加密保存；打开前先检查 Wi-Fi（未连接直接提示、不展开空面板）；微软邮箱（Outlook / Hotmail / Live / MSN）被拒绝并引导到手表端 OAuth2 授权（扫码页只能粘贴密码，配微软邮箱注定失败） |
 | 加密本地存储 | Android Keystore（AES-256-GCM）+ `accounts.password_enc` 密文列 |
 | 统一收件箱 | 所有账户按时间倒序合并（`observeInbox`），顶部账户筛选器 |
 | 列表项信息 | 发件人 / 主题（单行截断）/ 智能时间（今天 HH:mm、本周 周X、更早 MM/DD）/ 未读标记 / 来源账户色点 |
@@ -257,7 +257,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `.gradlehome/`、`.gradle-dist/`、`.gradle/`、`.kotlin/` | Gradle/Kotlin 缓存与本地解压的发行版（数百 MB） |
 | `.tmp/`、`.refsrc/`、`.androidhome/` | 构建过程临时目录 / 依赖源码解压目录 / Android 用户目录 |
 | `build/`、`app/build/` | 构建产物（每次构建都变） |
-| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（27.73 MB / 3.46 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
+| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（27.75 MB / 3.48 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
 | `*.iml`、`.idea/`、`.DS_Store`、`Thumbs.db` | IDE 与系统文件 |
 
 **可以（也应该）上传**：`app/src/**`、`gradle/wrapper/**`（含 `gradle-wrapper.jar`）、

@@ -46,6 +46,7 @@ import com.wm.wearmail.core.AppContainer
 import com.wm.wearmail.mail.oauth.OAuthTokenService
 import com.wm.wearmail.ui.kit.CompactOptionGroupOf
 import com.wm.wearmail.ui.kit.SecondaryActionButton
+import com.wm.wearmail.model.AuthChoice
 import com.wm.wearmail.model.AuthType
 import com.wm.wearmail.model.MailSecurity
 import com.wm.wearmail.model.ProviderPreset
@@ -58,6 +59,7 @@ import com.wm.wearmail.ui.kit.ErrorBanner
 import com.wm.wearmail.ui.kit.LoadingIndicator
 import com.wm.wearmail.ui.kit.PrimaryActionButton
 import com.wm.wearmail.ui.kit.SectionHeader
+import com.wm.wearmail.ui.kit.ToastHost
 import com.wm.wearmail.ui.kit.WearIcons
 import com.wm.wearmail.ui.kit.WearTextField
 import com.wm.wearmail.ui.kit.rememberHaptics
@@ -108,6 +110,8 @@ fun AddAccountScreen(
     val listState = rememberLazyListState()
 
     var message by remember { mutableStateOf<String?>(null) }
+    // 说明：message 由页面末尾的 ToastHost 以**浮层**展示 —— 本页入口按钮在列表
+    // 顶部，若把提示渲染在列表内（原实现放在底部），用户经常看不到任何回应
 
     // 覆盖层的 ViewModel 会被 Activity 的 ViewModelStore 复用，进入本页时显式复位表单
     LaunchedEffect(Unit) { vm.resetSession() }
@@ -240,23 +244,24 @@ fun AddAccountScreen(
                         )
                     }
 
-                    // 认证方式：Outlook 只保留 OAuth2（微软已停用基本认证，见
-                    // ProviderPresets.authTypesFor），其余服务商显示全部可选项；
-                    // OAuth2 场景允许密码为空
-                    val availableAuthTypes = ProviderPresets.authTypesFor(state.presetId)
+                    // 登录方式：面向用户只呈现「密码/授权码」与「OAuth2 令牌」两项
+                    // （PASSWORD 与 APP_PASSWORD 合并，见 AuthChoice）；Outlook 预设
+                    // 只保留 OAuth2（微软已停用基本认证）；OAuth2 场景允许密码为空
+                    val availableAuthChoices =
+                        AuthChoice.forTypes(ProviderPresets.authTypesFor(state.presetId))
                     formSlot(index++, listState) { modifier ->
                         SectionHeader(text = "登录方式（可选）", modifier = modifier)
                     }
-                    availableAuthTypes.let { types ->
+                    availableAuthChoices.let { choices ->
                         formSlot(index++, listState, key = "auth-group") { modifier ->
                             CompactOptionGroupOf(
-                                labels = types.map { it.label },
-                                // 契约：selectPreset 已保证 state.authType ∈ types（Outlook 会自动
-                                // 切到 OAuth2），因此这里不会出现 -1 的未选中态
-                                selectedIndex = types.indexOf(state.authType),
+                                labels = choices.map { it.label },
+                                // 契约：selectPreset 已保证 state.authType 落在可选项内
+                                // （Outlook 自动切到 OAuth2），不会出现 -1 的未选中态
+                                selectedIndex = choices.indexOfFirst { it.matches(state.authType) },
                                 onSelect = { position ->
                                     haptics.tick()
-                                    vm.onAuthTypeChange(types[position])
+                                    vm.onAuthTypeChange(choices[position].authType)
                                 },
                                 modifier = modifier,
                             )
@@ -523,20 +528,6 @@ fun AddAccountScreen(
                 }
             }
 
-            message?.let { infoText ->
-                formSlot(index++, listState) { modifier ->
-                    Text(
-                        text = infoText,
-                        modifier = modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-
             // ---------------- 底部导航 ----------------
             if (state.step > AddAccountViewModel.STEP_EMAIL) {
                 formSlot(index++, listState) { modifier ->
@@ -567,6 +558,11 @@ fun AddAccountScreen(
                 }
             }
         }
+
+        // 交互反馈浮层：无论用户在看列表的哪一段都能看到回应。
+        // （真机反馈：无 Wi-Fi 时点「用手机扫码配置」没有任何可见提示 ——
+        // 提示文本渲染在列表底部，而入口按钮在顶部）
+        ToastHost(message = message, onDismiss = { message = null })
     }
 
     // ---------------- 扫码配置面板 ----------------

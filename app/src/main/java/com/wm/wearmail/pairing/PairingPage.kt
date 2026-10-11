@@ -1,5 +1,6 @@
 package com.wm.wearmail.pairing
 
+import com.wm.wearmail.model.AuthChoice
 import com.wm.wearmail.model.AuthType
 import com.wm.wearmail.model.MailSecurity
 import com.wm.wearmail.model.ProviderPreset
@@ -98,6 +99,7 @@ button {
 }
 button:active { background: #aecbfa; }
 .note { margin: 10px 0 0; color: #9aa0a6; font-size: 14px; }
+.ms-block { margin: 10px 0 0; padding: 10px 12px; color: #f28b82; background: #2a1d1d; border: 1px solid #5c2b2b; border-radius: 10px; font-size: 14px; }
 .foot { margin: 18px 0 0; color: #5f6368; font-size: 13px; text-align: center; }
 </style>
 </head>
@@ -106,13 +108,14 @@ button:active { background: #aecbfa; }
   <h1>WearMail 账户配置</h1>
   <p class="lead">在手表上输入邮箱很麻烦，请在手机上填写后提交。提交后凭据只在手表端加密保存。</p>
 
-  <form method="post" action="/pair" autocomplete="off">
+  <form method="post" action="/pair" autocomplete="off" id="pairForm">
     <input type="hidden" name="t" value="$safeToken">
 
     <fieldset>
       <legend>账户</legend>
       <label for="email">邮箱地址</label>
       <input id="email" name="email" type="email" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" required>
+      <p class="ms-block" id="msBlock" hidden>微软邮箱（Outlook / Hotmail）不支持扫码配置：请使用手表上的 OAuth2 授权（手表「添加账户」选 Outlook 后点「获取授权」）。</p>
       <label for="alias">账户别名（可选）</label>
       <input id="alias" name="alias" type="text" placeholder="工作 / 个人" maxlength="32">
       <label for="password">密码 / 授权码</label>
@@ -227,6 +230,45 @@ button:active { background: #aecbfa; }
       fillFromPreset(found);
     }
   });
+
+  // 微软邮箱拦截：域名数据直接取自注入的 OUTLOOK 预设（与手表端
+  // ProviderPresets.isMicrosoftMailbox 同一份数据）。微软已停用基本认证，
+  // 扫码页只能粘贴密码/授权码 —— 在提交前就拦住并给出替代路径；
+  // 服务端还会再拦一次（前端可被绕过，服务端是底线）。
+  function microsoftKeywords() {
+    var outlook = presetById('outlook');
+    return (outlook && outlook.keywords && outlook.keywords.length)
+      ? outlook.keywords
+      : ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'];
+  }
+
+  function isMicrosoftEmail(email) {
+    var at = email.lastIndexOf('@');
+    if (at < 0) { return false; }
+    var domain = email.slice(at + 1).toLowerCase();
+    if (!domain) { return false; }
+    var keys = microsoftKeywords();
+    for (var i = 0; i < keys.length; i++) {
+      if (domain === keys[i] || domain.slice(-(keys[i].length + 1)) === '.' + keys[i]) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function refreshMicrosoftBlock() {
+    byId('msBlock').hidden = !isMicrosoftEmail(byId('email').value.trim());
+  }
+
+  byId('email').addEventListener('input', refreshMicrosoftBlock);
+
+  byId('pairForm').addEventListener('submit', function (event) {
+    if (isMicrosoftEmail(byId('email').value.trim())) {
+      event.preventDefault();
+      refreshMicrosoftBlock();
+      byId('msBlock').scrollIntoView({ block: 'center' });
+    }
+  });
 })();
 </script>
 </body>
@@ -252,16 +294,22 @@ button:active { background: #aecbfa; }
         return options.toString()
     }
 
-    /** 认证方式下拉项；默认选中「应用专用密码」（第三方客户端最常见） */
+    /**
+     * 认证方式下拉项。
+     *
+     * 与手表端共用 [AuthChoice]：「登录密码」与「应用专用密码」对用户是同一件事
+     * （都是填密码/授权码），合并为一项「密码/授权码」并默认选中
+     * （第三方客户端最常见的形态）。
+     */
     private fun buildAuthOptions(): String {
         val options = StringBuilder()
-        for (type in AuthType.entries) {
+        for (choice in AuthChoice.forTypes(AuthType.entries)) {
             options.append("<option value=\"")
-                .append(escapeHtml(type.name))
+                .append(escapeHtml(choice.authType.name))
                 .append('"')
-            if (type == AuthType.APP_PASSWORD) options.append(" selected")
+            if (choice.authType == AuthType.APP_PASSWORD) options.append(" selected")
             options.append('>')
-                .append(escapeHtml(type.label))
+                .append(escapeHtml(choice.label))
                 .append("</option>")
         }
         return options.toString()

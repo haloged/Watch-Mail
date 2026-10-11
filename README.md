@@ -9,8 +9,8 @@
 ![Platform](https://img.shields.io/badge/Wear%20OS-3.0%2B%20(API%2030%2B)-blue)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-7F52FF)
 ![Compose](https://img.shields.io/badge/Compose%20for%20Wear-1.5.6-4285F4)
-![Tests](https://img.shields.io/badge/tests-265%20passing-brightgreen)
-![Static checks](https://img.shields.io/badge/static%20checks-19%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-273%20passing-brightgreen)
+![Static checks](https://img.shields.io/badge/static%20checks-22%20passing-brightgreen)
 ![APK](https://img.shields.io/badge/release%20APK-3.45%20MB-informational)
 
 </div>
@@ -22,37 +22,23 @@
 一个**完整的、可编译运行的** Wear OS 邮箱客户端：手写 SQLite + JavaMail 收信发信、Android Keystore
 加密保管凭据、局域网扫码从手机配置账户、Outlook/Office 365 走 OAuth2 设备码流。
 
-项目不是"能跑就行"的演示：**265 个纯 JVM 单元测试 + 19 项静态检查**全绿，圆屏布局按几何公式推导，
+项目不是"能跑就行"的演示：**273 个纯 JVM 单元测试 + 22 项静态检查**全绿，圆屏布局按几何公式推导，
 每一处设计取舍与踩过的坑都写在文档里（包括**至今仍未在真机验证的部分**）。
 
 > 技术文档（完整功能清单 / 构建 / 目录结构 / 安全说明 / 已知限制）见 **[docs/TECHNICAL.md](docs/TECHNICAL.md)**。
 
 ## 亮点
 
-
+| | |
 |---|---|
 | 🧮 **圆屏几何当作数学问题** | 安全半径 210px、逐项按 Y 坐标计算弦长收窄列表项、**纵向预算**被写成静态检查：信息流可视带 < 100dp 或按钮热区 < 48px 会直接让 CI 失败 |
-| 📱 **手机扫码配置账户** | 手表起一个一次性 token 的局域网 HTTP 服务并显示二维码 → 手机扫码填表 → 凭据经 Keystore 加密落盘。手表上打字体验太差，这是最省事的路径 |
+| 📱 **手机扫码配置账户** | 手表起一个一次性 token 的局域网 HTTP 服务并显示二维码 → 手机扫码填表 → 凭据经 Keystore 加密落盘。手表上打字体验太差，这是最省事的路径；打开前会检查 Wi-Fi，微软邮箱会被拦下并引导到手表端 OAuth2 授权 |
 | 🎛 **按钮只有一半大** | 自绘 24dp 迷你胶囊（= 常规 52dp 按钮的一半，恰好等于 48px 触控下限），把 233dp 表盘的信息流可视带从 65dp 提到 **123dp（约 3 行邮件）** |
 | 🔐 **凭据不落明文** | AES-256-GCM + Android Keystore；OAuth2 的 refresh token 同样加密存储；日志门面在**编译期之外**还有静态红线检查 |
 | 🔄 **版本自动检查** | 启动时静默请求 GitHub Releases 并做**语义化版本比较**（不是字符串比较），有新版本弹窗提示、设置页可手动检查；失败不打扰、不拖慢冷启动 |
 | 🧪 **可测性优先** | 几何、HTML 剥离、地址解析、加密、OAuth2 轮询状态机、通知自检全部下沉为纯函数，无需模拟器即可回归 |
 
-## 界面与圆屏适配
 
-<img src="docs/assets/inbox-layout.svg" alt="收件箱纵向预算示意：顶部 56dp 筛选、中部 123dp 信息流、底部 54dp 主按钮" width="360">
-
-> 上图按 [docs/UI_SPEC.md](docs/UI_SPEC.md) 的几何**绘制**（非真机截图）：466×466 圆屏在 density 2.0 下高 233dp，
-> 顶部给时间弧线与筛选器、底部给主按钮，**中间剩下的才是信息流**。
-
-| 版本 | 顶部占用 | 底部占用 | 信息流干净可视带 |
-|------|--------:|--------:|----------------:|
-| 初版 | 88dp | 136dp | 9dp（不到一行邮件） |
-| 第二轮（状态信息移入列表尾项 + 紧凑胶囊） | 84dp | 84dp | 65dp（约 1.5 行） |
-| **当前（按钮减半为 24dp 迷你件）** | **56dp** | **54dp** | **123dp（约 3 行）** |
-
-布局约束全部来自几何而非手感：例如底部按钮的下沿不能低于 y=211dp，因为再往下圆弧的可用弦长会小于
-胶囊宽度，按钮两端会被切掉。
 
 ## 功能一览
 
@@ -81,12 +67,12 @@
 ### 构建与安装
 
 ```bash
-./gradlew test                 # 265 个单元测试（纯 JVM，无需设备）
+./gradlew test                 # 273 个单元测试（纯 JVM，无需设备）
 ./gradlew assembleDebug        # 调试包
-./gradlew assembleRelease      # 发布包（R8 压缩+混淆+优化 + 资源压缩，约 3.46 MB）
+./gradlew assembleRelease      # 发布包（R8 压缩+混淆+优化 + 资源压缩，约 3.48 MB）
 ./gradlew installDebug         # 安装到已连接的手表
 
-python tools/static_checks.py  # 19 项静态检查（不需要 Gradle/SDK）
+python tools/static_checks.py  # 22 项静态检查（不需要 Gradle/SDK）
 ```
 
 Windows 下把 `./gradlew` 换成 `gradlew.bat`。
@@ -105,7 +91,8 @@ Windows 下把 `./gradlew` 换成 `gradlew.bat`。
 
 ## 配置 Outlook（OAuth2）
 
-**Release版本已配置**
+[!TIP]
+Release版本已配置
 
 微软已对 Exchange Online / Outlook.com **停用 IMAP/SMTP 基础认证**，所以 Outlook 账户只能走 OAuth2。
 本项目已完整实现设备码流与令牌续期，但**客户端 ID 需要你自己注册**（没人能替你注册）：
@@ -143,26 +130,14 @@ core/AppContainer（手写依赖容器，无 Hilt/KSP）
 1. **不用 Room / Hilt / KSP / navigation-compose**：数量有限时手写更可控，也避免注解处理器拖慢构建、
    增大手表上的方法数。路由用 `HorizontalPager` + 覆盖层状态机。
 2. **可测性驱动分层**：凡是能下沉为纯函数的逻辑（几何、解析、状态机）都不碰 Android API，
-   这样在没有设备/模拟器的环境里也能有 265 个测试兜底。
+   这样在没有设备/模拟器的环境里也能有 273 个测试兜底。
 3. **不可自动验证的部分写成静态规则**：覆盖层透明度、Keystore 的 IV 约束、信息流纵向预算、
    密文列写入语义、正文缓存三态、列表项坐标换算这六类"只在真机/联调暴露"的问题，
    全部固化成静态检查并验证过规则对缺陷版本会 FAIL。
 4. **安全默认值**：凭据只以密文落盘、令牌不进入任何 `data class`（避免 `toString()` 泄露）、
    日志门面 + 静态红线、`allowBackup=false`、扫码服务用一次性 token 且离开页面立即关端口。
 
-## 测试与验证
 
-| 项目 | 结果 |
-|------|------|
-| 单元测试（纯 JVM，无需设备） | ✅ **265 / 265 通过**（20 个测试类） |
-| 静态检查 | ✅ **19 / 19 通过**（`python tools/static_checks.py`） |
-| Debug / Release 构建 | ✅ 27.73 MB / **3.46 MB**（R8 压缩+混淆+优化 + 资源压缩） |
-| 真机端到端 | ⚠️ **未验证**（无真机环境，见下） |
-
-**未在真机验证的部分（诚实说明）**：真实 IMAP/SMTP 收发、IMAP IDLE 行为、通知实际弹出、
-表冠手感、冷启动耗时、帧率与内存峰值、R8 压缩后的运行行为、Outlook OAuth2 的真实授权往返
-（无 Azure 应用与真实账户）。协议与逻辑均有单元测试覆盖，但**真机行为需要你自己确认**；
-`docs/TESTING.md` §7 提供了 30 条可执行的手工验收清单，§5.3 记录了 7 个真实缺陷案例的根因与修复。
 
 ## 项目结构
 
@@ -177,7 +152,7 @@ app/src/main/java/com/wm/wearmail/
 ├── pairing/   PairingController · ConfigWebServer · PairingPage · QrCodeRenderer
 ├── ui/        theme/ · kit/ · nav/ · screen/{inbox,detail,compose,accounts,settings}
 └── util/      TimeFormat
-app/src/test/  20 个测试类 / 265 个用例
+app/src/test/  21 个测试类 / 273 个用例
 tools/         static_checks.py · test_summary.py · mirrors-init.gradle
 docs/          TECHNICAL.md · ARCHITECTURE.md · UI_SPEC.md · TESTING.md
 ```
@@ -189,7 +164,7 @@ docs/          TECHNICAL.md · ARCHITECTURE.md · UI_SPEC.md · TESTING.md
 | [docs/TECHNICAL.md](docs/TECHNICAL.md) | **技术与验证文档**：完整功能清单、构建、目录结构、安全与隐私、已知限制、发布前检查 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层结构、数据库表、同步策略、安全设计、OAuth2 授权与令牌续期、性能取舍、依赖矩阵 |
 | [docs/UI_SPEC.md](docs/UI_SPEC.md) | 圆屏坐标系与弦长表、纵向预算、按钮尺寸层级、覆盖层规范、六页布局、手势映射 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试策略与覆盖矩阵、静态检查、真实缺陷案例、未验证项、36 条真机验收清单 |
+| [docs/TESTING.md](docs/TESTING.md) | 测试策略与覆盖矩阵、静态检查、真实缺陷案例、未验证项、38 条真机验收清单 |
 
 ## 已知限制
 

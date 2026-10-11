@@ -61,14 +61,31 @@ class PairingPageTest {
     // ---------------- 枚举值契约：必须是枚举名，不能是中文标签 ----------------
 
     @Test
-    fun `认证方式的 value 使用枚举名`() {
+    fun `认证方式的 value 使用枚举名且密码项已合并`() {
         assertTrue(html.contains("value=\"APP_PASSWORD\""))
-        assertTrue(html.contains("value=\"PASSWORD\""))
         assertTrue(html.contains("value=\"OAUTH2\""))
+        // 「登录密码」与「应用专用密码」已合并为「密码/授权码」（AuthChoice），
+        // 不再单独出现 PASSWORD 值或「登录密码」文案
+        assertFalse(html.contains("value=\"PASSWORD\""))
+        assertFalse(html.contains("登录密码"))
         assertFalse(
             "value 不能是中文标签，否则服务端只能退化为默认值",
-            html.contains("value=\"应用专用密码\""),
+            html.contains("value=\"密码/授权码\""),
         )
+        assertTrue("合并后的选项应展示中文文案", html.contains(">密码/授权码</option>"))
+        assertTrue("密码选项应默认选中", html.contains("value=\"APP_PASSWORD\" selected"))
+    }
+
+    @Test
+    fun `页面包含微软邮箱扫码拦截`() {
+        // 前端拦截脚本（提交前提示 + 输入时实时提示）与提示元素
+        assertTrue(html.contains("isMicrosoftEmail"))
+        assertTrue(html.contains("<p class=\"ms-block\" id=\"msBlock\" hidden>"))
+        assertTrue(
+            "拦截提示应说明微软邮箱不支持扫码配置并指向手表 OAuth2",
+            html.contains("不支持扫码配置"),
+        )
+        assertTrue("提交监听挂在表单 id 上", html.contains("pairForm"))
     }
 
     @Test

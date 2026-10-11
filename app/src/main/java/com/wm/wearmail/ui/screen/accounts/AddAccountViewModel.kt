@@ -687,8 +687,19 @@ class AddAccountViewModel(private val container: AppContainer) : ViewModel() {
     // 手机扫码配置
     // ------------------------------------------------------------------
 
-    /** 展开扫码面板并在局域网启动一次性配置服务 */
+    /**
+     * 展开扫码面板并在局域网启动一次性配置服务。
+     *
+     * 打开前先检查 Wi-Fi：手机扫码要求手机与手表处于同一 Wi-Fi，
+     * 未连接时直接提示并且**不展开面板**（避免弹出一个没有二维码的空对话框）。
+     */
     fun startPairing() {
+        if (!container.pairing.isWifiConnected()) {
+            Logs.i(TAG, "未连接 Wi-Fi，扫码配置未启动")
+            _events.tryEmit(AddAccountEvent.Message("请先连接 Wi-Fi，再使用手机扫码配置", success = false))
+            return
+        }
+
         _uiState.update { it.copy(pairingVisible = true, pairing = it.pairing.copy(error = null)) }
         viewModelScope.launch {
             // 启动本地 HTTP 服务涉及套接字绑定，放到 IO 线程避免卡住表盘

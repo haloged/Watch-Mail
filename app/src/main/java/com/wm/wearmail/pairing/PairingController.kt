@@ -2,6 +2,8 @@ package com.wm.wearmail.pairing
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import com.wm.wearmail.core.AppContainer
 import com.wm.wearmail.core.Logs
@@ -146,6 +148,25 @@ class PairingController(private val container: AppContainer) : PairingService {
     override fun renderQr(content: String, sizePx: Int): Bitmap? =
         QrCodeRenderer.render(content, sizePx)
 
+    /**
+     * 是否连接 Wi-Fi：用 ConnectivityManager 精确判定传输通道。
+     *
+     * 不用 `resolveLanIp()` 近似 —— 蜂窝网络下也可能拿到一个 IP，
+     * 但手机扫码根本无法访问该地址，用「有没有 IP」判定会失真。
+     */
+    override fun isWifiConnected(): Boolean {
+        return try {
+            val connectivityManager = container.app.applicationContext
+                .getSystemService(ConnectivityManager::class.java)
+            val capabilities = connectivityManager
+                ?.getNetworkCapabilities(connectivityManager.activeNetwork)
+            capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        } catch (t: Throwable) {
+            Logs.w(TAG, "检查 Wi-Fi 连接状态失败", t)
+            false
+        }
+    }
+
     // ------------------------------------------------------------------
     // 请求处理
     // ------------------------------------------------------------------
@@ -195,6 +216,20 @@ class PairingController(private val container: AppContainer) : PairingService {
         val email = form["email"].orEmpty().trim()
         if (!EMAIL_REGEX.matches(email)) {
             return errorPage("邮箱地址格式不正确（收到：「${email.take(EMAIL_ECHO_CHARS)}」），请检查后重试。", token)
+        }
+
+        // 微软邮箱（Outlook / Hotmail / Live / MSN）必须走手表端 OAuth2 授权：
+        // 扫码页只能粘贴密码/授权码，而微软已停用基本认证 —— 在这里直接拦住，
+        // 并给出可执行的替代路径（比"保存成功但永远收不到信"好得多）。
+        // 前端也有同样的拦截（提交前提示）；此处是绕过前端后的**服务端底线**。
+        if (ProviderPresets.isMicrosoftMailbox(email)) {
+            Logs.i(TAG, "拒绝扫码配置微软邮箱：需手表端 OAuth2 授权")
+            return errorPage(
+                reason = "微软邮箱（Outlook / Hotmail）不支持扫码配置",
+                token = token,
+                hint = "微软已停用密码登录。请在手表上「添加账户」选择 Outlook 预设，" +
+                    "用「获取授权」完成 OAuth2 授权（手表会显示短码与授权二维码）。",
+            )
         }
 
         val password = form["password"].orEmpty()
@@ -409,11 +444,15 @@ class PairingController(private val container: AppContainer) : PairingService {
      * 早期版本标题固定为「提交失败」，导致「主机没填」「端口写成全角数字」
      * 这类问题无法自诊断，反馈里只能看到"提交失败"。
      */
-    private fun errorPage(reason: String, token: String): ConfigWebServer.HttpResponse =
+    private fun errorPage(
+        reason: String,
+        token: String,
+        hint: String = "请返回上一页修改后重试。",
+    ): ConfigWebServer.HttpResponse =
         ConfigWebServer.HttpResponse.html(
             resultPage(
                 title = reason,
-                message = "请返回上一页修改后重试。",
+                message = hint,
                 success = false,
                 token = token,
             ),

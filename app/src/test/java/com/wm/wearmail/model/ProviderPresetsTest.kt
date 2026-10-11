@@ -1,6 +1,7 @@
 package com.wm.wearmail.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -42,5 +43,25 @@ class ProviderPresetsTest {
             val types = ProviderPresets.authTypesFor(preset.id)
             assertTrue("预设 ${preset.id} 的认证方式列表不能为空", types.isNotEmpty())
         }
+    }
+
+    @Test
+    fun `识别微软个人邮箱域`() {
+        assertTrue(ProviderPresets.isMicrosoftMailbox("user@outlook.com"))
+        assertTrue(ProviderPresets.isMicrosoftMailbox("USER@Hotmail.com"))
+        assertTrue(ProviderPresets.isMicrosoftMailbox("a@live.com"))
+        assertTrue(ProviderPresets.isMicrosoftMailbox("a@msn.com"))
+        // 子域（如 mail.outlook.com）按后缀识别
+        assertTrue(ProviderPresets.isMicrosoftMailbox("a@mail.outlook.com"))
+    }
+
+    @Test
+    fun `非微软邮箱不会误判`() {
+        assertFalse(ProviderPresets.isMicrosoftMailbox("user@gmail.com"))
+        assertFalse(ProviderPresets.isMicrosoftMailbox("user@qq.com"))
+        assertFalse(ProviderPresets.isMicrosoftMailbox("user@163.com"))
+        assertFalse(ProviderPresets.isMicrosoftMailbox("user@company.com"))
+        assertFalse(ProviderPresets.isMicrosoftMailbox(""))
+        assertFalse(ProviderPresets.isMicrosoftMailbox("not-an-email"))
     }
 }

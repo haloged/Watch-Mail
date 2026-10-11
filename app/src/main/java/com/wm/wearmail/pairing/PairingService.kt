@@ -51,6 +51,16 @@ interface PairingService {
     val state: StateFlow<PairingState>
 
     /**
+     * 当前是否已连接 Wi-Fi。
+     *
+     * 手机扫码要求手机与手表处于同一 Wi-Fi；UI 在打开扫码面板**之前**先用
+     * 本方法检查，未连接时直接提示用户（避免弹出一个没有二维码的空对话框）。
+     * 注意：蜂窝网络下局域网地址不可达，因此这里必须精确判定 Wi-Fi 传输通道，
+     * 不能用「有没有拿到 IP」近似。
+     */
+    fun isWifiConnected(): Boolean
+
+    /**
      * 启动本地配置服务并生成二维码。
      *
      * 若未连接 Wi-Fi（拿不到局域网 IP），返回的 [PairingState.error] 会给出提示，

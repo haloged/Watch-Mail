@@ -142,6 +142,15 @@ object ProviderPresets {
     fun byId(id: String): ProviderPreset = all.firstOrNull { it.id == id } ?: ENTERPRISE
 
     /**
+     * 邮箱是否属于微软个人邮箱域（Outlook / Hotmail / Live / MSN）。
+     *
+     * 微软已停用 IMAP/SMTP 基本认证：这类账户必须走 OAuth2 设备码授权
+     * （只能在手表上完成）。「手机扫码配置」只能粘贴密码/授权码，配微软邮箱
+     * 注定失败，因此扫码流程必须用本函数把它们拦下并引导到手表端授权。
+     */
+    fun isMicrosoftMailbox(email: String): Boolean = detect(email).id == OUTLOOK.id
+
+    /**
      * 指定预设支持的认证方式。
      *
      * Outlook / Office 365 已全面停用 IMAP/SMTP 的**基本身份验证**（含应用密码），

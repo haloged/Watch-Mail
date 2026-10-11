@@ -60,20 +60,21 @@ python tools/test_summary.py
 | `NotificationDiagnosticsTest` | 10 | 三层开关判定、结论优先级（系统权限 → 渠道 → 应用内 → 账户级）、被静音账户列表 | 通知测试与自检 |
 | `ConfigWebServerTest` | 9 | 真实起 HTTP 服务、GET/POST 解析、URL 解码、404、stop 幂等 | 扫码配置 |
 | `PairingFormDefaultsTest` | 14 | 主机留空时按「显式预设 → 邮箱域名」兜底、两侧独立回填、空白裁剪、企业域名返回 null | 扫码配置（域名识别） |
-| `PairingPageTest` | 13 | 网页与**服务端解析的契约**：字段名、枚举值（非中文标签）、主机不得 `required`、无 `novalidate`、token 转义 | 扫码配置（防前端/后端漂移） |
+| `PairingPageTest` | 14 | 网页与**服务端解析的契约**：字段名、枚举值（非中文标签）、密码项已合并、主机不得 `required`、无 `novalidate`、token 转义、微软邮箱拦截提示 | 扫码配置（防前端/后端漂移） |
 | `AccountFormValidatorTest` | 18 | 邮箱/端口/主机校验、边界值 | 账户配置 |
 | `InboxRowFormatterTest` | 21 | 发件人/主题截断、空主题、未读角标边界 | 列表项展示 |
 | `EmailHtmlDocumentTest` | 13 | 渲染前清理不可信片段（script/iframe/meta refresh/`javascript:` 伪协议、大小写混写）、注入 viewport 与圆屏内边距、深色适配、默认屏蔽远程图片、超长 HTML 上限与截断 | 邮件 HTML 渲染（可选） |
 | `SecretWriteTest` | 5 | 密文列写入意图：`Keep`（不改动）与 `Set(null)`（显式清空）语义分离、`of(update=false)` 恒为 Keep、`Set` 按值相等 | 账户凭据安全（P0 防回归） |
 | `HtmlCacheStateTest` | 8 | 三态映射（SQL NULL / 空串 / 非空文本）、抓取结果写列、往返一致、`resolved` 必须精确等于「不是 UNKNOWN」 | 正文缓存完整性（P1 防回归） |
-| `ProviderPresetsTest` | 4 | Outlook 仅 OAuth2（其余预设不受限）、未知预设回退全集、认证方式列表非空契约 | 添加账户（Outlook OAuth2 锁定） |
+| `ProviderPresetsTest` | 6 | Outlook 仅 OAuth2（其余预设不受限）、未知预设回退全集、认证方式列表非空契约、微软个人邮箱域判定（含子域与不误判） | 添加账户（Outlook OAuth2 锁定 / 扫码拦截） |
 | `AppVersionTest` | 6 | 语义化版本解析（`v` 前缀/预发布后缀/非法输入）、逐段数值比较（`1.10.0 > 1.9.0`）、解析失败不误报 | 检查更新（版本比较） |
 | `UpdateJsonTest` | 6 | GitHub Releases 响应解析：完整字段、`body=null`、字段缺失/空白、非法 JSON 均安全返回 null | 检查更新（响应解析） |
-| **合计** | **265** | | |
+| `AuthChoiceTest` | 5 | 两个密码枚举合并为一个「密码/授权码」选项、顺序稳定、选中判定（PASSWORD 与 APP_PASSWORD 都能落到合并项）、任何允许的认证方式都有匹配选项 | 登录方式合并（防选中态丢失） |
+| **合计** | **273** | | |
 
 ## 4. 静态检查
 
-`tools/static_checks.py` 的检查项与失败含义（**19 项全部通过**）：
+`tools/static_checks.py` 的检查项与失败含义（**22 项全部通过**）：
 
 | 检查 | 失败含义 |
 |------|---------|
@@ -94,6 +95,9 @@ python tools/test_summary.py
 | release 启用 R8 优化 | release 关掉 `isMinifyEnabled` / `isShrinkResources`、默认规则换成 `proguard-android.txt`、或加入 `-dontoptimize` / `-dontobfuscate`（R8 优化被静默关闭） |
 | **检查更新链路约束** | GitHub API 缺 `User-Agent`（返回 403，真机只表现为"检查失败"）；版本比较绕过 `AppVersion.isNewer`（`1.10.0` 会被判小于 `1.9.0`）；`UpdateCenter` 未注册 / 启动检查未接入弹窗；Application 冷启动路径发起网络请求（拖慢启动） |
 | OAuth2 配置独立页面 | 设置页重新出现 OAuth2 输入框（应只保留入口按钮，输入框在 `OAuth2ConfigScreen`）；独立页或导航入口缺失（用户将无法配置 OAuth2） |
+| **微软邮箱禁止扫码配置** | `ProviderPresets.isMicrosoftMailbox`（判定）/ 服务端 `handleSubmit` 拦截 / 网页端提交前提示三者缺一：微软邮箱会走扫码配置而注定失败（保存成功但永远收不到信） |
+| 扫码配置 Wi-Fi 前置检查 | `AddAccountViewModel.startPairing` 未做 Wi-Fi 前置检查（用户先看到无二维码的空对话框）；或判定退化为"有没有局域网 IP"（蜂窝网络会误判为可配对） |
+| **交互反馈使用浮层提示** | 添加账户页 / 设置页的提示重新渲染进列表内容：入口与提示处在不同滚动位置时会互相看不见（真机反馈 ×2 的「点击后没有任何提示」）；断言 `ToastHost` 组件存在且两个页面在使用 |
 | Kotlin 括号配平 | 明显的语法破损 |
 | 每个 Kotlin 文件声明包名 | 文件头缺失 `package`，构建失败 |
 
@@ -106,17 +110,17 @@ python tools/test_summary.py
 
 | 任务 | 结果 | 产物 |
 |------|------|------|
-| `:app:testDebugUnitTest` | ✅ 265 / 265 通过 | `app/build/reports/tests/testDebugUnitTest/index.html` |
-| `:app:assembleDebug` | ✅ BUILD SUCCESSFUL（**27.73 MB**） | `app/build/outputs/apk/debug/app-debug.apk` |
-| `:app:assembleRelease`（R8 压缩+混淆+优化 + 资源压缩） | ✅ BUILD SUCCESSFUL（**3.46 MB**） | `app/build/outputs/apk/release/app-release.apk` |
+| `:app:testDebugUnitTest` | ✅ 273 / 273 通过 | `app/build/reports/tests/testDebugUnitTest/index.html` |
+| `:app:assembleDebug` | ✅ BUILD SUCCESSFUL（**27.75 MB**） | `app/build/outputs/apk/debug/app-debug.apk` |
+| `:app:assembleRelease`（R8 压缩+混淆+优化 + 资源压缩） | ✅ BUILD SUCCESSFUL（**3.48 MB**） | `app/build/outputs/apk/release/app-release.apk` |
 
-代码规模：主源码 86 个 Kotlin 文件 / 约 18,290 行，测试 20 个文件 / 约 3,300 行。
+代码规模：主源码 87 个 Kotlin 文件 / 约 18,460 行，测试 21 个文件 / 约 3,410 行。
 编译期仅有弃用警告（`Icons.Filled.ArrowBack` 等迁移到 `Icons.AutoMirrored`，
 Material Icons 1.7.7 的 deprecation），不影响功能。
 
-### 5.2 单元测试：265 / 265 全部通过
+### 5.2 单元测试：273 / 273 全部通过
 
-逐类结果见 §3 的用例数，合计 **265 用例 / 0 失败 / 0 错误 / 0 跳过**，用例耗时合计约 0.5 秒。
+逐类结果见 §3 的用例数，合计 **273 用例 / 0 失败 / 0 错误 / 0 跳过**，用例耗时合计约 0.5 秒。
 
 其中 `ConfigWebServerTest` 是**真实起 HTTP 服务**（`ServerSocket` 绑定随机端口）并用
 `HttpURLConnection` 发 GET/POST 的集成式单元测试，覆盖查询串 URL 解码、表单正文解析、
@@ -280,12 +284,13 @@ OAuth2 账户（令牌存在密码列）一律报「尚未完成授权」，现�
 python tools/static_checks.py
 ```
 
-静态检查结果：**19 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
+静态检查结果：**22 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
 统一日志门面、无 `System.out`、加解密不依赖 `android.util.Base64`、
 **AES-GCM 与 Android Keystore 兼容**、**圆屏纵向预算**、**覆盖层不透明且拦截指针**、
 **账户密文列写入语义（SecretWrite）**、**正文 HTML 缓存三态语义**、
 **列表项坐标换算（内容坐标→屏幕坐标）**、Outlook 认证方式仅 OAuth2、release 启用 R8 优化、
-**检查更新链路约束**、OAuth2 配置独立页面、括号配平、包名声明）。
+**检查更新链路约束**、OAuth2 配置独立页面、**微软邮箱禁止扫码配置**、
+扫码配置 Wi-Fi 前置检查、**交互反馈使用浮层提示**、括号配平、包名声明）。
 
 ### 5.5 构建环境说明（不影响交付物本身）
 
@@ -351,8 +356,11 @@ python tools/static_checks.py
 21. **覆盖层背景**：从收件箱进入「添加账户」「撰写邮件」「邮件详情」时，**不应看到上一页的任何内容**；
     在覆盖层空白处上下/左右滑动、点击，也不应触发后面的分页切换或误开邮件
     （曾经的缺陷，修复见 §5.3 第 3 条）。
-22. **扫码配置（含留空兜底）**：手机填写邮箱+授权码后**不填 IMAP/SMTP 地址**直接提交：
-    - QQ/Gmail/163/Outlook 邮箱应保存成功（服务端按域名自动识别），并显示「已保存账户」；
+22. **扫码配置（含留空兜底与微软拦截）**：手机填写邮箱+授权码后**不填 IMAP/SMTP 地址**直接提交：
+    - QQ/Gmail/163 邮箱应保存成功（服务端按域名自动识别），并显示「已保存账户」；
+    - **微软邮箱（outlook.com / hotmail.com / live.com / msn.com）**：输入时页面应即时
+      出现红色提示，提交被阻止；若禁用 JS 强行提交，服务端应返回「微软邮箱不支持扫码
+      配置」并指引改用手表端 OAuth2 授权；
     - 企业邮箱/自建域名应给出**明确提示**（而不是笼统的"提交失败"）；
     - 对同一邮箱**再扫一次**应显示「已更新账户」，不应报错；
     - 出错页点「返回修改」应能回到表单（不应出现"配对链接已失效"）。
@@ -408,8 +416,9 @@ python tools/static_checks.py
 34. **检查更新（自动 + 手动）**：
     - 自动：在一台装着旧版本的表上启动应用，首帧渲染后 1~2 秒内应弹出「发现新版本 vX.Y.Z」；
       点「稍后」关闭后**重新启动应用应再次提示**（不持久化跳过）；
-    - 手动：设置 → 关于 → 「检查更新」。已是最新时顶部提示「已是最新版本」；
-      断开网络再点，应提示「检查更新失败：网络不可用或请求被拒绝」，按钮恢复可用；
+    - 手动：设置 → 关于 → 「检查更新」。已是最新时**屏幕中央浮层提示**「已是最新版本」
+      （约 2 秒自动消失、不依赖滚动位置；按钮在列表底部，提示必须出现在视线内）；
+      断开网络再点，应浮层提示「检查更新失败：网络不可用或请求被拒绝」，按钮恢复可用；
     - 边界：GitHub 不可达（部分网络环境）时应用**不得崩溃或卡顿**，其余功能完全不受影响。
 35. **更新弹窗的下载跳转**：弹窗点「前往下载」——有浏览器的手表应打开 Release 页并关闭弹窗；
     没有浏览器时弹窗**不消失**，改为显示 GitHub 地址指引、按钮切换为「知道了」（不得闪退）。
@@ -418,3 +427,11 @@ python tools/static_checks.py
     - 修改客户端 ID 后返回再进入，值应保留（输入即保存）；
     - 随后到「添加账户 → Outlook → 获取授权」走一次设备码流，应能正常拿到短码
       （证明拆分页面未破坏 OAuth2 链路）。
+37. **扫码配置的 Wi-Fi 前置检查**：断开手表 Wi-Fi（仅蜂窝或飞行模式）后进入
+    「添加账户 → 用手机扫码配置」：应**屏幕中央浮层提示**「请先连接 Wi-Fi，再使用手机
+    扫码配置」（约 2 秒自动消失；入口在列表顶部，提示必须一眼可见），
+    **不弹出二维码对话框**；连上 Wi-Fi 后再点，应正常出码。
+38. **登录方式合并**：添加账户步骤 1 的「登录方式」应只有**「密码/授权码」**与
+    **「OAuth2 令牌」**两项（不再有单独的「登录密码」「应用专用密码」）；选 Outlook
+    预设时只剩「OAuth2 令牌」；切回 Gmail 恢复两项；手机扫码页的「认证方式」下拉
+    同样只有两项（「密码/授权码」默认选中）。
