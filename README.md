@@ -91,8 +91,8 @@ Windows 下把 `./gradlew` 换成 `gradlew.bat`。
 
 ## 配置 Outlook（OAuth2）
 
-[!TIP]
-Release版本已配置
+> [!TIP]
+>Release版本已配置
 
 微软已对 Exchange Online / Outlook.com **停用 IMAP/SMTP 基础认证**，所以 Outlook 账户只能走 OAuth2。
 本项目已完整实现设备码流与令牌续期，但**客户端 ID 需要你自己注册**（没人能替你注册）：
