@@ -1,0 +1,36 @@
+// ============================================================================
+// 可选：国内 Maven 镜像加速初始化脚本（不修改项目本身的仓库配置）
+// ----------------------------------------------------------------------------
+// 项目 settings.gradle.kts 使用官方仓库（google() / mavenCentral()），保证
+// 依赖来源可审计。在中国大陆网络下官方源可能很慢，此时用本脚本临时注入阿里云
+// 镜像（优先级高于官方源，镜像缺失时自动回落到官方源）：
+//
+//   gradlew --init-script tools/mirrors-init.gradle assembleDebug
+//
+// 也可以永久启用：
+//   copy tools\mirrors-init.gradle %USERPROFILE%\.gradle\init.gradle
+//
+// 注意：本脚本只在 settings 级别重排仓库，**不能**在 allprojects 里加
+// repositories —— 项目启用了 FAIL_ON_PROJECT_REPOS，那样会直接构建失败。
+// 本文件是 Groovy DSL（.gradle），不是 Kotlin DSL，不能用 Kotlin 的 apply/also。
+// ============================================================================
+
+settingsEvaluated { settings ->
+    // ---- 插件解析仓库（镜像优先）----
+    def pluginRepos = settings.pluginManagement.repositories
+    pluginRepos.clear()
+    pluginRepos.maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+    pluginRepos.maven { url = 'https://maven.aliyun.com/repository/google' }
+    pluginRepos.maven { url = 'https://maven.aliyun.com/repository/public' }
+    pluginRepos.google()
+    pluginRepos.mavenCentral()
+    pluginRepos.gradlePluginPortal()
+
+    // ---- 依赖解析仓库（镜像优先，官方源兜底）----
+    def dependencyRepos = settings.dependencyResolutionManagement.repositories
+    dependencyRepos.clear()
+    dependencyRepos.maven { url = 'https://maven.aliyun.com/repository/google' }
+    dependencyRepos.maven { url = 'https://maven.aliyun.com/repository/public' }
+    dependencyRepos.google()
+    dependencyRepos.mavenCentral()
+}

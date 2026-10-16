@@ -19,8 +19,8 @@ android {
         // Wear OS 3.0（API 30）起步：可覆盖绝大多数在售智能手表
         minSdk = 30
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.1"
+        versionCode = 4
+        versionName = "1.2.2"
 
         // Microsoft (Outlook) OAuth2 客户端 ID。
         // 优先级：手表「设置 → Outlook OAuth2」里填写的值 > 这里注入的默认值。

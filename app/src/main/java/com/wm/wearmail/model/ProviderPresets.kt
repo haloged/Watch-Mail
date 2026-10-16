@@ -105,10 +105,10 @@ object ProviderPresets {
         authHint = "需在网易邮箱设置中开启 IMAP/SMTP 并使用「授权码」登录",
     )
 
-    /** 企业邮箱 / 自建服务器：仅提供占位域名，具体地址由用户填写或自动探测 */
+    /** 其他（企业邮箱 / 自建服务器等）：仅提供占位域名，具体地址由用户填写或自动探测 */
     val ENTERPRISE = ProviderPreset(
         id = "enterprise",
-        label = "企业邮箱 / 自建",
+        label = "其他",
         domainKeywords = emptyList(),
         config = ServerConfig(
             imapHost = "",
@@ -153,11 +153,16 @@ object ProviderPresets {
     /**
      * 指定预设支持的认证方式。
      *
-     * Outlook / Office 365 已全面停用 IMAP/SMTP 的**基本身份验证**（含应用密码），
-     * 第三方客户端只能用 OAuth2。因此该预设下「添加账户」页只展示 OAuth2 一项，
-     * 并把表单的登录方式自动锁定到 OAuth2，避免用户选到注定失败的密码认证；
-     * 其余服务商保留全部可选项（企业/自建服务器两种方式都可能用得上）。
+     * - **Outlook / Office 365**：微软已全面停用 IMAP/SMTP 基本认证（含应用密码），
+     *   只能用 OAuth2。该预设下「添加账户」页只展示 OAuth2，并自动锁定，
+     *   避免用户选到注定失败的密码认证；
+     * - **其余服务商**：只提供「密码/授权码」（PASSWORD / APP_PASSWORD 两个底层枚举，
+     *   UI 上合并为一项）。**OAuth2 是 Outlook 专属**，不再向其他预设开放。
      */
     fun authTypesFor(presetId: String): List<AuthType> =
-        if (presetId == OUTLOOK.id) listOf(AuthType.OAUTH2) else AuthType.entries
+        if (presetId == OUTLOOK.id) {
+            listOf(AuthType.OAUTH2)
+        } else {
+            listOf(AuthType.PASSWORD, AuthType.APP_PASSWORD)
+        }
 }

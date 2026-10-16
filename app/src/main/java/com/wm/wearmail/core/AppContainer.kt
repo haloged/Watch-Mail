@@ -31,7 +31,9 @@ import com.wm.wearmail.pairing.PairingController
 import com.wm.wearmail.pairing.PairingService
 import com.wm.wearmail.sync.SyncEngine
 import com.wm.wearmail.sync.SyncService
+import com.wm.wearmail.update.ApkDownloader
 import com.wm.wearmail.update.GitHubUpdateChecker
+import com.wm.wearmail.update.HttpApkDownloader
 import com.wm.wearmail.update.UpdateCenter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -110,6 +112,12 @@ class AppContainer(val app: Application) {
             currentVersion = BuildConfig.VERSION_NAME,
         )
     }
+
+    /**
+     * 应用内更新下载器：发现新版本后由「更新弹窗」驱动下载到
+     * `filesDir/updates/`，直连失败或速度过慢时自动切换 gh-proxy 加速。
+     */
+    val apkDownloader: ApkDownloader by lazy { HttpApkDownloader() }
 
     companion object {
         @Volatile

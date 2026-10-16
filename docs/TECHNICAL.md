@@ -14,10 +14,10 @@
 
 | 项目 | 结果 |
 |------|------|
-| 单元测试（纯 JVM，无需设备） | ✅ **273 / 273 通过**（21 个测试类） |
-| Debug APK | ✅ 构建成功，**27.75 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
-| Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.48 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
-| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层/密文列语义/缓存三态/坐标换算/R8 优化/更新链路/OAuth2 页面/扫码拦截/Wi-Fi 前置/浮层提示等 22 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
+| 单元测试（纯 JVM，无需设备） | ✅ **285 / 285 通过**（22 个测试类） |
+| Debug APK | ✅ 构建成功，**28.06 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
+| Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.51 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
+| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层/密文列语义/缓存三态/坐标换算/R8 优化/更新链路/OAuth2 页面/扫码拦截/Wi-Fi 前置/浮层提示/链接开关等 23 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
 | 测试报告 | [`dist/reports/test-summary.txt`](../dist/reports/test-summary.txt)、[`dist/reports/unit-tests/index.html`](../dist/reports/unit-tests/index.html) |
 | 真机端到端（IMAP/SMTP 实收实发、通知、表冠手感） | ⚠️ **未验证**，需真实手表，清单见 [docs/TESTING.md](TESTING.md) §7 |
 
@@ -47,13 +47,13 @@
 | 邮件详情 | 发件人、收件人、时间、主题、**纯文本正文**（HTML 已剥离）、可滚动 + 底部固定操作栏（回复/删除/已读）；可选开启 **HTML 渲染**（见下） |
 | 撰写并发送 | 收件人（常用联系人快捷选择）、主题、正文（500 字提示）、发件账户选择；`Sending → Success(✓+振动) / Failure(✗+振动+重试)` |
 | 离线草稿 | 发送失败自动存草稿，联网后自动补投（`flushPendingDrafts`） |
-| 邮件 HTML 渲染（可选） | 设置里「渲染 HTML 邮件」开关（**默认关闭**）：开启后详情页用 WebView 渲染原始 HTML，并可在「HTML / 纯文本」间切换；WebView 禁 JS、默认禁网络（屏蔽远程图片与追踪像素），HTML 先经清理；原始 HTML 缓存在 `email_bodies.body_html`（数据库 v1 → v2 迁移） |
+| 邮件 HTML 渲染 | 设置里「渲染 HTML 邮件」开关（**默认开启**；关闭后退回纯文本、最省内存与存储）：详情页用 WebView 渲染原始 HTML，并可在「HTML / 纯文本」间切换；WebView 禁 JS、默认禁网络（屏蔽远程图片与追踪像素），HTML 先经清理；**链接默认不可点击，「打开邮件内链接」开关开启后由系统浏览器打开（仅 http/https，无浏览器时浮层提示）**；原始 HTML 缓存在 `email_bodies.body_html`（数据库 v1 → v2 迁移） |
 | IMAP 收信 | JavaMail；首次 50 封元数据、增量按 UID、IDLE 推送（支持时）、10 秒超时 |
 | SMTP 发信 | JavaMail；AUTH LOGIN/PLAIN、**XOAUTH2**、SSL/TLS/STARTTLS |
 | 断线重连 | `BackoffPolicy` 指数退避（1s→60s，±20% 抖动，区分可重试错误） |
 | 数据同步策略 | 首次仅元数据、正文按需、增量 UID/SINCE、前台 5 分钟 / 后台 15–30 分钟 / 手动 |
 | 本地缓存上限 | 元数据 500 封 + 正文 50 封，超出按 LRU 淘汰 |
-| **检查更新** | 启动时自动请求 GitHub Releases 最新版本（`haloged/Watch-Mail`）并与当前版本做语义化比较，有新版本弹出提示；设置页「关于」提供手动检查入口；请求在首帧后异步执行（不阻塞冷启动），失败静默、不影响其他功能 |
+| **检查更新** | 启动时自动请求 GitHub Releases 最新版本（`haloged/Watch-Mail`）并与当前版本做语义化比较，有新版本弹出**带更新日志**的提示；弹窗内**应用内直接下载** APK（直连慢/失败自动切换 gh-proxy 加速），完成后拉起系统安装器；设置页「关于」提供手动检查入口；请求在首帧后异步执行（不阻塞冷启动），失败静默、不影响其他功能 |
 | 圆形表盘适配 | 安全半径 210px、按 Y 坐标动态计算弦长收窄列表项、顶/底弧形区分区 |
 | 交互 | 上下滑滚动、左右滑切换页面、点击、长按菜单、表冠旋转、全操作振动反馈 |
 
@@ -236,7 +236,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 7. **检查更新依赖 GitHub API 的可达性**：自动/手动检查都直接请求 `api.github.com`
    （未走镜像）；在 GitHub 访问受限的网络环境下会超时失败，表现为「检查更新失败」
    —— 只影响该功能本身，其余功能不受影响。匿名调用的速率上限（60 次/小时）
-   对本应用的使用频率（每次启动一次）不构成问题。
+   对本应用的使用频率（每次启动一次）不构成问题。自 v1.2.2 起**下载环节**已支持
+   gh-proxy.com 加速回退（6 秒窗口内平均速度低于 24KB/s 或直连失败即切换），
+   但**检查环节**仍为直连。
 
 ## 相关文档
 
@@ -257,7 +259,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `.gradlehome/`、`.gradle-dist/`、`.gradle/`、`.kotlin/` | Gradle/Kotlin 缓存与本地解压的发行版（数百 MB） |
 | `.tmp/`、`.refsrc/`、`.androidhome/` | 构建过程临时目录 / 依赖源码解压目录 / Android 用户目录 |
 | `build/`、`app/build/` | 构建产物（每次构建都变） |
-| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（27.75 MB / 3.48 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
+| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（28.06 MB / 3.51 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
 | `*.iml`、`.idea/`、`.DS_Store`、`Thumbs.db` | IDE 与系统文件 |
 
 **可以（也应该）上传**：`app/src/**`、`gradle/wrapper/**`（含 `gradle-wrapper.jar`）、

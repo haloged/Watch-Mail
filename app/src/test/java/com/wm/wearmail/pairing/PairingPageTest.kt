@@ -61,19 +61,19 @@ class PairingPageTest {
     // ---------------- 枚举值契约：必须是枚举名，不能是中文标签 ----------------
 
     @Test
-    fun `认证方式的 value 使用枚举名且密码项已合并`() {
+    fun `认证方式只保留密码项（OAuth2 为 Outlook 专属）`() {
         assertTrue(html.contains("value=\"APP_PASSWORD\""))
-        assertTrue(html.contains("value=\"OAUTH2\""))
-        // 「登录密码」与「应用专用密码」已合并为「密码/授权码」（AuthChoice），
-        // 不再单独出现 PASSWORD 值或「登录密码」文案
+        assertTrue("合并后的选项应展示中文文案", html.contains(">密码/授权码</option>"))
+        assertTrue("密码选项应默认选中", html.contains("value=\"APP_PASSWORD\" selected"))
+        // 扫码页不提供 OAuth2（Outlook 专属，且微软邮箱在扫码流程会被拦截），
+        // 也不再单独出现 PASSWORD 值或「登录密码」文案
+        assertFalse(html.contains("value=\"OAUTH2\""))
         assertFalse(html.contains("value=\"PASSWORD\""))
         assertFalse(html.contains("登录密码"))
         assertFalse(
             "value 不能是中文标签，否则服务端只能退化为默认值",
             html.contains("value=\"密码/授权码\""),
         )
-        assertTrue("合并后的选项应展示中文文案", html.contains(">密码/授权码</option>"))
-        assertTrue("密码选项应默认选中", html.contains("value=\"APP_PASSWORD\" selected"))
     }
 
     @Test

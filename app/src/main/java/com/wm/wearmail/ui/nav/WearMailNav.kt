@@ -217,6 +217,7 @@ fun WearMailApp(
         UpdateAvailableDialog(
             info = info,
             currentVersion = container.updates.currentVersion,
+            downloader = container.apkDownloader,
             onDismiss = { container.updates.dismissUpdate() },
         )
     }

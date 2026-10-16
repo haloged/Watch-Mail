@@ -23,18 +23,23 @@ class ProviderPresetsTest {
     }
 
     @Test
-    fun `其余预设保留全部认证方式`() {
-        val all = AuthType.entries.toList()
+    fun `OAuth2 是 Outlook 专属，其余预设不含`() {
+        val passwordTypes = listOf(AuthType.PASSWORD, AuthType.APP_PASSWORD)
         for (preset in ProviderPresets.all.filter { it.id != ProviderPresets.OUTLOOK.id }) {
-            assertEquals("预设 ${preset.id} 不应被收窄", all, ProviderPresets.authTypesFor(preset.id))
+            assertEquals(
+                "预设 ${preset.id} 应只提供密码/授权码",
+                passwordTypes,
+                ProviderPresets.authTypesFor(preset.id),
+            )
         }
     }
 
     @Test
-    fun `未知预设 id 回退到全部认证方式`() {
+    fun `未知预设 id 回退到密码类认证方式`() {
         // byId 对未知 id 回退到 ENTERPRISE，authTypesFor 同样不应崩溃或返回空列表
-        assertEquals(AuthType.entries.toList(), ProviderPresets.authTypesFor("unknown-provider"))
-        assertEquals(AuthType.entries.toList(), ProviderPresets.authTypesFor(""))
+        val passwordTypes = listOf(AuthType.PASSWORD, AuthType.APP_PASSWORD)
+        assertEquals(passwordTypes, ProviderPresets.authTypesFor("unknown-provider"))
+        assertEquals(passwordTypes, ProviderPresets.authTypesFor(""))
     }
 
     @Test

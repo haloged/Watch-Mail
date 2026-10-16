@@ -50,13 +50,15 @@ data class AppSettings(
     /** Microsoft OAuth2 租户：默认 `common`（同时支持个人账号与企业账号） */
     val microsoftOAuthTenant: String = "common",
     /**
-     * 是否在邮件详情里渲染 HTML（**默认关闭**）。
+     * 是否在邮件详情里渲染 HTML（**默认开启**）。
      *
-     * 默认关闭的原因：渲染 HTML 需要 WebView（内存占用明显高于纯文本），
-     * 而且原始 HTML 会被写进正文缓存（一封营销邮件常见几十到几百 KB）。
-     * 纯文本模式在这两点上都更省，因此交由用户按设备性能自行开启。
+     * 默认开启：HTML 排版（表格、链接样式、图片占位）对阅读体验提升明显，
+     * 开箱即用；渲染只在详情页发生（WebView 按需创建、离开即销毁），
+     * 列表与同步链路不受影响。低配手表可在设置里关掉退回纯文本 ——
+     * 纯文本是零成本基线，HTML 邮件也能照常阅读。
+     * 远程图片仍**默认屏蔽**（追踪像素），需要时单独开启。
      */
-    val htmlRenderingEnabled: Boolean = false,
+    val htmlRenderingEnabled: Boolean = true,
     /**
      * HTML 渲染时是否允许加载**远程图片**（**默认关闭**）。
      *
@@ -64,6 +66,14 @@ data class AppSettings(
      * 手表上默认屏蔽；确实需要看图时再由用户显式打开。
      */
     val remoteImagesEnabled: Boolean = false,
+    /**
+     * 点击邮件内的超链接时**用默认浏览器打开**（**默认关闭**）。
+     *
+     * 默认关闭的原因：手表上跳出应用是重操作，且邮件链接指向站外内容
+     * （不可信）；只有用户显式打开后，http/https 链接才会交给浏览器，
+     * 其余协议（mailto:、tel: 等）一律忽略，WebView 自身也绝不导航。
+     */
+    val openLinksInBrowser: Boolean = false,
 ) {
     /** 后台间隔必须落在系统允许的 15 分钟以上 */
     val normalizedBackgroundMinutes: Int

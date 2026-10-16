@@ -70,4 +70,52 @@ class UpdateJsonTest {
         // JSON 数组不是对象
         assertNull(UpdateJson.parseLatestRelease("[]"))
     }
+
+    @Test
+    fun `解析 assets 时优先取 release 命名的 APK`() {
+        val json = """
+            {
+              "tag_name": "v1.2.2",
+              "html_url": "https://github.com/haloged/Watch-Mail/releases/tag/v1.2.2",
+              "assets": [
+                {"name": "app-debug.apk", "browser_download_url": "https://github.com/haloged/Watch-Mail/releases/download/v1.2.2/app-debug.apk"},
+                {"name": "app-release.apk", "browser_download_url": "https://github.com/haloged/Watch-Mail/releases/download/v1.2.2/app-release.apk"},
+                {"name": "source.zip", "browser_download_url": "https://github.com/haloged/Watch-Mail/releases/download/v1.2.2/source.zip"}
+              ]
+            }
+        """.trimIndent()
+        val info = UpdateJson.parseLatestRelease(json)
+        assertEquals(
+            "https://github.com/haloged/Watch-Mail/releases/download/v1.2.2/app-release.apk",
+            info?.apkUrl,
+        )
+    }
+
+    @Test
+    fun `assets 无 APK 时下载地址为 null`() {
+        val noApk = """
+            {"tag_name":"v1.2.2","html_url":"https://example.com/r",
+             "assets":[{"name":"src.zip","browser_download_url":"https://example.com/src.zip"}]}
+        """.trimIndent()
+        assertNull(UpdateJson.parseLatestRelease(noApk)?.apkUrl)
+        // 完全没有 assets 字段（旧版本发布也可能不带资产）
+        val noAssets = """{"tag_name":"v1.2.2","html_url":"https://example.com/r"}"""
+        assertNull(UpdateJson.parseLatestRelease(noAssets)?.apkUrl)
+    }
+
+    @Test
+    fun `无 release 命名时回退第一个 APK 且拒绝非 https`() {
+        val fallback = """
+            {"tag_name":"v1.2.2","html_url":"https://example.com/r",
+             "assets":[{"name":"WearMail.apk","browser_download_url":"https://example.com/WearMail.apk"}]}
+        """.trimIndent()
+        assertEquals("https://example.com/WearMail.apk", UpdateJson.parseLatestRelease(fallback)?.apkUrl)
+
+        // 非 https 的下载地址不可用（避免被篡改的响应把安装包指向明文地址）
+        val insecure = """
+            {"tag_name":"v1.2.2","html_url":"https://example.com/r",
+             "assets":[{"name":"WearMail.apk","browser_download_url":"http://example.com/WearMail.apk"}]}
+        """.trimIndent()
+        assertNull(UpdateJson.parseLatestRelease(insecure)?.apkUrl)
+    }
 }

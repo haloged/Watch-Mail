@@ -419,9 +419,17 @@ class PairingController(private val container: AppContainer) : PairingService {
         return if (value in MIN_PORT..MAX_PORT) value else null
     }
 
-    private fun parseAuthType(raw: String?): AuthType =
-        AuthType.entries.firstOrNull { it.name.equals(raw?.trim(), ignoreCase = true) }
-            ?: AuthType.APP_PASSWORD
+    /**
+     * 解析表单里的认证方式。
+     *
+     * 扫码配置只支持密码/授权码：OAuth2 是 Outlook 专属（见
+     * [ProviderPresets.authTypesFor]），伪造提交也会被归一到
+     * [AuthType.APP_PASSWORD]，不可能通过扫码页创建 OAuth2 账户。
+     */
+    private fun parseAuthType(raw: String?): AuthType {
+        val parsed = AuthType.entries.firstOrNull { it.name.equals(raw?.trim(), ignoreCase = true) }
+        return if (parsed == null || parsed == AuthType.OAUTH2) AuthType.APP_PASSWORD else parsed
+    }
 
     private fun parseSecurity(raw: String?): MailSecurity =
         MailSecurity.entries.firstOrNull { it.name.equals(raw?.trim(), ignoreCase = true) }

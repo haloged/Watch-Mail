@@ -130,7 +130,7 @@ button:active { background: #aecbfa; }
       <select id="presetId" name="presetId">$presetOptions</select>
       <p class="note" id="authHint">选择服务商后会显示获取授权码的提示。</p>
       <p class="note">IMAP / SMTP 地址<strong>可以留空</strong>：手表会按邮箱域名自动识别（Gmail / Outlook / QQ / 163 等）。
-        企业邮箱或自建域名请向管理员索取后填写。</p>
+        其他邮箱请向管理员索取后填写。</p>
     </fieldset>
 
     <fieldset>
@@ -297,13 +297,14 @@ button:active { background: #aecbfa; }
     /**
      * 认证方式下拉项。
      *
-     * 与手表端共用 [AuthChoice]：「登录密码」与「应用专用密码」对用户是同一件事
-     * （都是填密码/授权码），合并为一项「密码/授权码」并默认选中
-     * （第三方客户端最常见的形态）。
+     * 扫码配置**只能粘贴密码/授权码**：OAuth2 是 Outlook 专属（见
+     * [com.wm.wearmail.model.ProviderPresets.authTypesFor]），而微软邮箱在扫码
+     * 流程里会被直接拦截 —— 因此这里与手表端共用 [AuthChoice]，但只保留下
+     * 密码一项（「登录密码」与「应用专用密码」合并为「密码/授权码」）。
      */
     private fun buildAuthOptions(): String {
         val options = StringBuilder()
-        for (choice in AuthChoice.forTypes(AuthType.entries)) {
+        for (choice in AuthChoice.forTypes(listOf(AuthType.PASSWORD, AuthType.APP_PASSWORD))) {
             options.append("<option value=\"")
                 .append(escapeHtml(choice.authType.name))
                 .append('"')

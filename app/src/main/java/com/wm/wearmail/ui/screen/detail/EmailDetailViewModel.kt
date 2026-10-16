@@ -25,6 +25,18 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
+ * 渲染相关设置的聚合（HTML 渲染 / 远程图片 / 链接外部打开）。
+ *
+ * 这三个开关只在邮件详情页消费、且总是一起变化，聚合后避免
+ * 用嵌套 Pair/Triple 传递（可读性优先）。
+ */
+data class RenderSettings(
+    val htmlEnabled: Boolean,
+    val remoteImagesEnabled: Boolean,
+    val openLinksInBrowser: Boolean,
+)
+
+/**
  * 邮件详情状态。
  *
  * @param mail 邮件元数据；null 且 [DetailUiState.mailGone] 为 true 表示本地已无此邮件
@@ -39,10 +51,12 @@ data class DetailUiState(
     val body: String? = null,
     /** 原始 HTML 正文（仅在设置开启「渲染 HTML 邮件」后才会缓存/加载） */
     val html: String? = null,
-    /** 设置：是否渲染 HTML（默认关闭，见 AppSettings.htmlRenderingEnabled） */
+    /** 设置：是否渲染 HTML（默认开启，见 AppSettings.htmlRenderingEnabled） */
     val htmlEnabled: Boolean = false,
     /** 设置：HTML 渲染时是否允许加载远程图片 */
     val remoteImagesEnabled: Boolean = false,
+    /** 设置：点击邮件内链接是否用浏览器打开（默认关闭，见 AppSettings.openLinksInBrowser） */
+    val openLinksInBrowser: Boolean = false,
     val loadingBody: Boolean = false,
     val loadingMail: Boolean = true,
     val error: String? = null,
@@ -101,9 +115,15 @@ class EmailDetailViewModel(
      */
     private var htmlCacheResolved = false
 
-    /** 渲染相关设置（HTML 渲染 / 远程图片），随设置页改动即时生效 */
-    private val renderSettings: Flow<Pair<Boolean, Boolean>> = container.settings.settings
-        .map { it.htmlRenderingEnabled to it.remoteImagesEnabled }
+    /** 渲染相关设置（HTML 渲染 / 远程图片 / 链接外部打开），随设置页改动即时生效 */
+    private val renderSettings: Flow<RenderSettings> = container.settings.settings
+        .map {
+            RenderSettings(
+                htmlEnabled = it.htmlRenderingEnabled,
+                remoteImagesEnabled = it.remoteImagesEnabled,
+                openLinksInBrowser = it.openLinksInBrowser,
+            )
+        }
 
     private val deleted = MutableStateFlow(false)
 
@@ -170,7 +190,7 @@ class EmailDetailViewModel(
      * 单独合并的原因：[kotlinx.coroutines.flow.combine] 的类型化重载最多 5 个流，
      * 而最终 uiState 已经用了 4 个，这里先把三个相关状态压成一个。
      */
-    private val bodyAndRendering: Flow<Triple<BodyState?, String?, Pair<Boolean, Boolean>>> =
+    private val bodyAndRendering: Flow<Triple<BodyState?, String?, RenderSettings>> =
         combine(resolvedBody, resolvedHtml, renderSettings) { body, html, rendering ->
             Triple(body, html, rendering)
         }
@@ -185,8 +205,9 @@ class EmailDetailViewModel(
             mail = mail,
             body = (body as? BodyState.Loaded)?.text,
             html = html,
-            htmlEnabled = rendering.first,
-            remoteImagesEnabled = rendering.second,
+            htmlEnabled = rendering.htmlEnabled,
+            remoteImagesEnabled = rendering.remoteImagesEnabled,
+            openLinksInBrowser = rendering.openLinksInBrowser,
             loadingBody = body is BodyState.Loading,
             loadingMail = !observed,
             error = (body as? BodyState.Failed)?.message,

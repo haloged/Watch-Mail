@@ -63,18 +63,19 @@ python tools/test_summary.py
 | `PairingPageTest` | 14 | 网页与**服务端解析的契约**：字段名、枚举值（非中文标签）、密码项已合并、主机不得 `required`、无 `novalidate`、token 转义、微软邮箱拦截提示 | 扫码配置（防前端/后端漂移） |
 | `AccountFormValidatorTest` | 18 | 邮箱/端口/主机校验、边界值 | 账户配置 |
 | `InboxRowFormatterTest` | 21 | 发件人/主题截断、空主题、未读角标边界 | 列表项展示 |
-| `EmailHtmlDocumentTest` | 13 | 渲染前清理不可信片段（script/iframe/meta refresh/`javascript:` 伪协议、大小写混写）、注入 viewport 与圆屏内边距、深色适配、默认屏蔽远程图片、超长 HTML 上限与截断 | 邮件 HTML 渲染（可选） |
+| `EmailHtmlDocumentTest` | 13 | 渲染前清理不可信片段（script/iframe/meta refresh/`javascript:` 伪协议、大小写混写）、注入 viewport 与圆屏内边距、深色适配、默认屏蔽远程图片、超长 HTML 上限与截断 | 邮件 HTML 渲染 |
 | `SecretWriteTest` | 5 | 密文列写入意图：`Keep`（不改动）与 `Set(null)`（显式清空）语义分离、`of(update=false)` 恒为 Keep、`Set` 按值相等 | 账户凭据安全（P0 防回归） |
 | `HtmlCacheStateTest` | 8 | 三态映射（SQL NULL / 空串 / 非空文本）、抓取结果写列、往返一致、`resolved` 必须精确等于「不是 UNKNOWN」 | 正文缓存完整性（P1 防回归） |
-| `ProviderPresetsTest` | 6 | Outlook 仅 OAuth2（其余预设不受限）、未知预设回退全集、认证方式列表非空契约、微软个人邮箱域判定（含子域与不误判） | 添加账户（Outlook OAuth2 锁定 / 扫码拦截） |
+| `ProviderPresetsTest` | 6 | Outlook 仅 OAuth2、**OAuth2 为 Outlook 专属（其余预设只含密码类）**、未知预设回退密码类、认证方式列表非空契约、微软个人邮箱域判定（含子域与不误判） | 添加账户（OAuth2 锁定与专属收窄 / 扫码拦截） |
 | `AppVersionTest` | 6 | 语义化版本解析（`v` 前缀/预发布后缀/非法输入）、逐段数值比较（`1.10.0 > 1.9.0`）、解析失败不误报 | 检查更新（版本比较） |
-| `UpdateJsonTest` | 6 | GitHub Releases 响应解析：完整字段、`body=null`、字段缺失/空白、非法 JSON 均安全返回 null | 检查更新（响应解析） |
+| `UpdateJsonTest` | 9 | GitHub Releases 响应解析：完整字段、`body=null`、字段缺失/空白、非法 JSON 均安全返回 null；**assets 资产挑选（优先 release 命名、回退首个 APK、拒绝非 https）** | 检查更新（响应解析 / 应用内下载地址） |
+| `ApkDownloaderTest` | 9 | 加速候选（gh-proxy 前缀只加给 GitHub 链接）、速度过慢判定（窗口未满不判 / 低于 24KB/s 判过慢 / 持平不判）、进度百分比（含未知总大小的 -1 与越界防御）、Release 说明清洗（Markdown 标记、空串、限长截断） | 应用内更新（下载策略与更新日志） |
 | `AuthChoiceTest` | 5 | 两个密码枚举合并为一个「密码/授权码」选项、顺序稳定、选中判定（PASSWORD 与 APP_PASSWORD 都能落到合并项）、任何允许的认证方式都有匹配选项 | 登录方式合并（防选中态丢失） |
-| **合计** | **273** | | |
+| **合计** | **285** | | |
 
 ## 4. 静态检查
 
-`tools/static_checks.py` 的检查项与失败含义（**22 项全部通过**）：
+`tools/static_checks.py` 的检查项与失败含义（**24 项全部通过**）：
 
 | 检查 | 失败含义 |
 |------|---------|
@@ -98,6 +99,8 @@ python tools/test_summary.py
 | **微软邮箱禁止扫码配置** | `ProviderPresets.isMicrosoftMailbox`（判定）/ 服务端 `handleSubmit` 拦截 / 网页端提交前提示三者缺一：微软邮箱会走扫码配置而注定失败（保存成功但永远收不到信） |
 | 扫码配置 Wi-Fi 前置检查 | `AddAccountViewModel.startPairing` 未做 Wi-Fi 前置检查（用户先看到无二维码的空对话框）；或判定退化为"有没有局域网 IP"（蜂窝网络会误判为可配对） |
 | **交互反馈使用浮层提示** | 添加账户页 / 设置页的提示重新渲染进列表内容：入口与提示处在不同滚动位置时会互相看不见（真机反馈 ×2 的「点击后没有任何提示」）；断言 `ToastHost` 组件存在且两个页面在使用 |
+| **邮件链接开关与外部打开** | 详情页不再消费 `openLinksInBrowser`（开关形同虚设）、WebView 脱离沙箱自行导航（缺 `shouldOverrideUrlLoading` 拦截）、或不再经 `ACTION_VIEW` 交给外部浏览器 |
+| **应用内更新下载链路** | UpdateJson 不再解析 APK 资产（拿不到安装包）、下载器丢失 gh-proxy 加速前缀或速度过慢判定（慢速直连永不回退）、弹窗未接下载器/安装器、Manifest 缺 `REQUEST_INSTALL_PACKAGES` 或 FileProvider（下载后装不上） |
 | Kotlin 括号配平 | 明显的语法破损 |
 | 每个 Kotlin 文件声明包名 | 文件头缺失 `package`，构建失败 |
 
@@ -110,17 +113,17 @@ python tools/test_summary.py
 
 | 任务 | 结果 | 产物 |
 |------|------|------|
-| `:app:testDebugUnitTest` | ✅ 273 / 273 通过 | `app/build/reports/tests/testDebugUnitTest/index.html` |
-| `:app:assembleDebug` | ✅ BUILD SUCCESSFUL（**27.75 MB**） | `app/build/outputs/apk/debug/app-debug.apk` |
-| `:app:assembleRelease`（R8 压缩+混淆+优化 + 资源压缩） | ✅ BUILD SUCCESSFUL（**3.48 MB**） | `app/build/outputs/apk/release/app-release.apk` |
+| `:app:testDebugUnitTest` | ✅ 285 / 285 通过 | `app/build/reports/tests/testDebugUnitTest/index.html` |
+| `:app:assembleDebug` | ✅ BUILD SUCCESSFUL（**28.06 MB**） | `app/build/outputs/apk/debug/app-debug.apk` |
+| `:app:assembleRelease`（R8 压缩+混淆+优化 + 资源压缩） | ✅ BUILD SUCCESSFUL（**3.51 MB**） | `app/build/outputs/apk/release/app-release.apk` |
 
 代码规模：主源码 87 个 Kotlin 文件 / 约 18,460 行，测试 21 个文件 / 约 3,410 行。
 编译期仅有弃用警告（`Icons.Filled.ArrowBack` 等迁移到 `Icons.AutoMirrored`，
 Material Icons 1.7.7 的 deprecation），不影响功能。
 
-### 5.2 单元测试：273 / 273 全部通过
+### 5.2 单元测试：285 / 285 全部通过
 
-逐类结果见 §3 的用例数，合计 **273 用例 / 0 失败 / 0 错误 / 0 跳过**，用例耗时合计约 0.5 秒。
+逐类结果见 §3 的用例数，合计 **285 用例 / 0 失败 / 0 错误 / 0 跳过**，用例耗时合计约 0.5 秒。
 
 其中 `ConfigWebServerTest` 是**真实起 HTTP 服务**（`ServerSocket` 绑定随机端口）并用
 `HttpURLConnection` 发 GET/POST 的集成式单元测试，覆盖查询串 URL 解码、表单正文解析、
@@ -284,13 +287,14 @@ OAuth2 账户（令牌存在密码列）一律报「尚未完成授权」，现�
 python tools/static_checks.py
 ```
 
-静态检查结果：**22 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
+静态检查结果：**24 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
 统一日志门面、无 `System.out`、加解密不依赖 `android.util.Base64`、
 **AES-GCM 与 Android Keystore 兼容**、**圆屏纵向预算**、**覆盖层不透明且拦截指针**、
 **账户密文列写入语义（SecretWrite）**、**正文 HTML 缓存三态语义**、
 **列表项坐标换算（内容坐标→屏幕坐标）**、Outlook 认证方式仅 OAuth2、release 启用 R8 优化、
 **检查更新链路约束**、OAuth2 配置独立页面、**微软邮箱禁止扫码配置**、
-扫码配置 Wi-Fi 前置检查、**交互反馈使用浮层提示**、括号配平、包名声明）。
+扫码配置 Wi-Fi 前置检查、**交互反馈使用浮层提示**、**邮件链接开关与外部打开**、
+**应用内更新下载链路**、括号配平、包名声明）。
 
 ### 5.5 构建环境说明（不影响交付物本身）
 
@@ -386,16 +390,17 @@ python tools/static_checks.py
       用于区分"系统不允许"与"应用内被关掉"），但自检结论必须明确说明真实邮件会被拦下。
 26. **信息流可视带**：收件箱中间可见的邮件行数应 ≥ 3 行；顶部筛选胶囊与底部「新建邮件」
     按钮视觉高度应约为普通按钮的一半，且**仍然容易点中**（热区 48px）。
-27. **邮件 HTML 渲染（可选功能）**：设置 → 「邮件正文」→ 开启「渲染 HTML 邮件」：
-    - 打开一封**排版型邮件**（营销邮件/带表格的邮件）：应先短暂加载，然后正文以
-      HTML 排版显示（标题变大、颜色/表格保留）；
+27. **邮件 HTML 渲染（默认开启）**：全新安装（或从未改过该设置）时，设置 →
+    「邮件正文 → 渲染 HTML 邮件」应**默认为开启**；打开一封**排版型邮件**
+    （营销邮件/带表格的邮件）：
+    - 应先短暂加载，然后正文以 HTML 排版显示（标题变大、颜色/表格保留）；
     - 右上角出现「HTML / 纯文本」胶囊：点击可切换，**切回纯文本后排版消失、内容仍在**；
     - 默认**不加载远程图片**（正文里图片位置留空）：这是追踪像素防护，不是缺陷；
       打开「显示远程图片」后重新进入，图片应能显示；
     - **安全自检**：HTML 里的脚本不应执行（可发一封带 `<script>` 的邮件验证页面无异常）；
-      点击正文里的链接**不应跳转**（手表无浏览器，跳走会困在 WebView 里）；
-    - **性能观察**：开启后打开长邮件时观察是否卡顿/发热；若明显影响流畅度，关掉开关即可
-      回到纯文本（这是该功能默认关闭的原因）；
+      默认点击正文里的链接**不跳转**（链接开关的行为验证见第 39 条）；
+    - **性能观察**：打开长邮件时观察是否卡顿/发热；若明显影响流畅度，关掉开关即可
+      回到纯文本（纯文本是零成本基线）。
     - 关闭开关后再打开同一封邮件：应回到纯文本（缓存中的 HTML 不再使用）。
 28. **数据库迁移**：从「已装过旧版本（库 v1）」的手表升级安装后，**原有账户与邮件不应丢失**；
     日志中应出现「迁移 v1 → v2：email_bodies 新增 body_html 列」。
@@ -431,7 +436,24 @@ python tools/static_checks.py
     「添加账户 → 用手机扫码配置」：应**屏幕中央浮层提示**「请先连接 Wi-Fi，再使用手机
     扫码配置」（约 2 秒自动消失；入口在列表顶部，提示必须一眼可见），
     **不弹出二维码对话框**；连上 Wi-Fi 后再点，应正常出码。
-38. **登录方式合并**：添加账户步骤 1 的「登录方式」应只有**「密码/授权码」**与
-    **「OAuth2 令牌」**两项（不再有单独的「登录密码」「应用专用密码」）；选 Outlook
-    预设时只剩「OAuth2 令牌」；切回 Gmail 恢复两项；手机扫码页的「认证方式」下拉
-    同样只有两项（「密码/授权码」默认选中）。
+38. **登录方式与 OAuth2 专属**：添加账户步骤 1 的「登录方式」按预设收窄 ——
+    Outlook 只显示**「OAuth2 令牌」**；其余预设只显示**「密码/授权码」**
+    （OAuth2 为 Outlook 专属，不再出现在其他预设与手机扫码页）；手机扫码页的
+    「认证方式」只保留「密码/授权码」。
+39. **邮件内链接开关**：设置开启「渲染 HTML 邮件」后，「打开邮件内链接」开关出现
+    （默认关）：
+    - 关闭时点击邮件内链接**无反应**（不跳转、不报错）；
+    - 打开后点击链接：装有浏览器的表应跳转到默认浏览器打开该网址；没有浏览器的表
+      应在屏幕中央浮层提示「未找到可用浏览器」；
+    - `mailto:` 等非 http/https 链接始终不响应。
+40. **服务商预设「其他」**：添加账户页的服务商选项组应显示「其他」（原「企业邮箱 /
+    自建」的改名）；选中它时登录方式只显示「密码/授权码」。
+41. **应用内更新下载**（v1.2.2）：在装有旧版本的表上启动应用：
+    - 弹出「发现新版本」时**应展示更新日志**（来自 GitHub Release 说明，Markdown
+      标记已被清洗，长文可在日志区内滚动）；
+    - 点「立即下载」：弹窗内直接下载（**不跳转浏览器**），显示百分比进度条；
+      直连链路被限速/不可达时应自动切换 gh-proxy 加速（进度区出现「（加速线路）」）；
+    - 下载完成后**自动拉起系统安装器**；首次安装前若提示「安装未知应用」，
+      应能跳转到系统授权页，授权后重新下载可完成安装；
+    - 下载中点「取消」或关闭弹窗：下载中止，无残留文件（`filesDir/updates/` 下无 `.part`）；
+    - 断网重试：失败提示 + 「重试」按钮，恢复网络后重试可成功。

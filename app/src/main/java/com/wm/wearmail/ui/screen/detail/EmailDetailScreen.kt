@@ -1,5 +1,8 @@
 package com.wm.wearmail.ui.screen.detail
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -25,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +49,7 @@ import androidx.wear.compose.material3.IconButton
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.wm.wearmail.core.AppContainer
+import com.wm.wearmail.core.Logs
 import com.wm.wearmail.core.RotaryBus
 import com.wm.wearmail.mail.EmailHtmlDocument
 import com.wm.wearmail.model.EmailMeta
@@ -56,6 +61,7 @@ import com.wm.wearmail.ui.kit.EmptyState
 import com.wm.wearmail.ui.kit.ErrorBanner
 import com.wm.wearmail.ui.kit.LoadingIndicator
 import com.wm.wearmail.ui.kit.MiniOptionButton
+import com.wm.wearmail.ui.kit.ToastHost
 import com.wm.wearmail.ui.kit.WearIcons
 import com.wm.wearmail.ui.kit.rememberHaptics
 import com.wm.wearmail.util.TimeFormat
@@ -70,8 +76,9 @@ import com.wm.wearmail.util.TimeFormat
  *  底部固定操作栏（不随正文滚动）：回复 · 删除 · 已读未读
  * ```
  *
- * 正文默认是协议层剥离后的**纯文本**（渲染开销最小）；设置里开启「渲染 HTML 邮件」且这封
- * 邮件确实带 HTML 时，右上角会出现「HTML / 纯文本」胶囊，默认按 HTML 渲染（见 [HtmlBodyView]）。
+ * 正文在设置开启「渲染 HTML 邮件」（**默认开启**）且这封邮件确实带 HTML 时，
+ * 默认按 HTML 渲染，右上角出现「HTML / 纯文本」胶囊可切换；
+ * 关闭设置或邮件没有 HTML 时，显示协议层剥离后的**纯文本**（渲染开销最小）。
  *
  * @param onReply 回复回调，参数为收件人地址与预填主题（`Re: 原主题`）
  */
@@ -94,6 +101,9 @@ fun EmailDetailScreen(
     val uiState by vm.uiState.collectAsStateWithLifecycle()
     val haptics = rememberHaptics()
     val listState = rememberLazyListState()
+
+    // 交互反馈浮层文案（例如「打开链接失败：未找到浏览器」）；显示在屏幕中央并自动消失
+    var toast by remember { mutableStateOf<String?>(null) }
 
     // 进入页面自动标记已读（带轻振动反馈）
     LaunchedEffect(emailId) {
@@ -146,7 +156,7 @@ fun EmailDetailScreen(
 
             mail != null -> {
                 // 正文渲染模式：仅当设置里开启「渲染 HTML 邮件」且确实取到了 HTML 时才有得选。
-                // 默认（设置关闭）走完全不变的纯文本列表。
+                // 设置关闭时走完全不变的纯文本列表。
                 val canRenderHtml = EmailHtmlDocument.isRenderable(uiState.htmlEnabled, uiState.html)
                 // 首帧的 uiState 仍是初始值（HTML 往往还在加载），因此**不能**用 remember 的初值
                 // 把模式锁死 —— 那会让「渲染 HTML 邮件」开关看起来没生效，必须手点一次胶囊。
@@ -158,6 +168,9 @@ fun EmailDetailScreen(
                     HtmlBodyView(
                         html = uiState.html.orEmpty(),
                         allowRemoteImages = uiState.remoteImagesEnabled,
+                        openLinksInBrowser = uiState.openLinksInBrowser,
+                        // 打开失败（没有浏览器/被系统拦截）：浮层提示，而不是静默无反应
+                        onOpenLinkFailed = { toast = "未找到可用浏览器，无法打开链接" },
                         modifier = Modifier.fillMaxSize(),
                     )
                 } else {
@@ -241,6 +254,9 @@ fun EmailDetailScreen(
                 modifier = Modifier.size(20.dp),
             )
         }
+
+        // 交互反馈浮层：例如「打开链接失败（未找到浏览器）」的提示
+        ToastHost(message = toast, onDismiss = { toast = null })
     }
 }
 
@@ -541,22 +557,25 @@ private val HTML_TOGGLE_PADDING = 46.dp
  * - `javaScriptEnabled = false`：不执行任何脚本；
  * - `blockNetworkLoads = true`（默认）：远程图片、追踪像素、外部样式一概不加载，
  *   仅在设置里显式打开「显示远程图片」时才放行；
- * - 关闭文件与内容访问；链接点击一律拦截（手表上没有浏览器，跳出去会让用户困住）；
+ * - 关闭文件与内容访问；WebView 自身**绝不导航**；
+ * - 链接点击：默认拦截（不响应）；设置里打开「打开邮件内链接」后，http/https
+ *   链接交给系统浏览器打开（失败与否都留在应用内，浮层提示失败原因）；
  * - HTML 先经 [EmailHtmlDocument] 清理（脚本 / iframe / meta refresh / `javascript:` 伪协议）
  *   并注入适配圆屏的样式。
- *
- * 为什么全屏铺满而不是像列表那样由 Compose 留边：圆屏安全边距由文档自身的 CSS padding 提供
- * （见 [EmailHtmlDocument]），这样正文可以像列表一样「滚过」上下弧形区，而不是被裁掉一截。
- *
- * 生命周期：WebView 持有原生资源，离开页面**必须** `destroy()`，否则手表内存吃紧。
  */
 @Composable
 private fun HtmlBodyView(
     html: String,
     allowRemoteImages: Boolean,
+    openLinksInBrowser: Boolean,
+    onOpenLinkFailed: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    // WebViewClient 只在创建时绑定一次；用 rememberUpdatedState 让回调读到**最新**的
+    // 开关值与回调，否则用户切换设置后要离开重进详情页才生效
+    val latestOpenLinks = rememberUpdatedState(openLinksInBrowser)
+    val latestOnFailed = rememberUpdatedState(onOpenLinkFailed)
     val document = remember(html, allowRemoteImages) {
         EmailHtmlDocument.build(html, allowRemoteImages = allowRemoteImages)
     }
@@ -572,12 +591,23 @@ private fun HtmlBodyView(
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
             setBackgroundColor(android.graphics.Color.BLACK)
-            // 链接一律不跳转（含 shouldOverrideUrlLoading 的新旧重载）
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?,
-                ): Boolean = true
+                ): Boolean {
+                    // 任何情况都不让 WebView 自己导航（保持内容沙箱化）：
+                    // 开关开启时把 http/https 交给默认浏览器；其余协议（mailto: 等）忽略
+                    val url = request?.url?.toString().orEmpty()
+                    if (latestOpenLinks.value &&
+                        (url.startsWith("http://") || url.startsWith("https://"))
+                    ) {
+                        if (!openLinkInBrowser(context, url)) {
+                            latestOnFailed.value()
+                        }
+                    }
+                    return true
+                }
             }
         }
     }
@@ -598,6 +628,23 @@ private fun HtmlBodyView(
     }
 
     AndroidView(factory = { webView }, modifier = modifier)
+}
+
+/**
+ * 交给系统默认浏览器打开链接。
+ *
+ * @return true 表示已成功发起跳转；false 表示没有可用浏览器或系统拒绝
+ *   （详情页会浮层提示，而不是让用户对着"没反应"猜）
+ */
+private fun openLinkInBrowser(context: Context, url: String): Boolean = try {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(intent)
+    true
+} catch (t: Throwable) {
+    // 只记异常类型：链接可能携带追踪参数等隐私信息，不打印内容
+    Logs.w("EmailDetail", "打开外部链接失败：${t.javaClass.simpleName}")
+    false
 }
 
 /** 正文切块字符数：控制单个列表项高度，避免圆形安全区把长文本压扁 */

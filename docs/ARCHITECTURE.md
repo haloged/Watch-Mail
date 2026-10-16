@@ -219,19 +219,24 @@ https://outlook.office.com/SMTP.Send               ← SMTP 发信
 JavaMail 会据此拼出 `user=<邮箱>^Aauth=Bearer <token>^A^A`。用户名必须是邮箱地址。
 `AccountSecrets.authSecret` 同时兼容「授权得到的令牌」与「用户手动粘贴的令牌」。
 
-### 4.6 邮件 HTML 渲染（可选功能，默认关闭）
+### 4.6 邮件 HTML 渲染（默认开启，可关）
 
-需求原本要求「正文只显示纯文本、HTML 一律剥离」，因此**纯文本仍是默认与基线**；
-HTML 渲染作为**用户显式开启**的增强功能存在（`AppSettings.htmlRenderingEnabled`，默认 false，
-设置页文案明确提示「更耗内存与存储，仅在性能足够的手表上开启」）。
+需求最初要求「正文只显示纯文本、HTML 一律剥离」；后续版本放开了 HTML 渲染
+（`AppSettings.htmlRenderingEnabled`），并在 v1.2.2 调整为**默认开启** ——
+HTML 排版（表格、链接样式、图片占位）对阅读体验提升明显，开箱即用。
 
-为什么默认关闭：
+为什么可以在手表上默认开启：
 
-- 渲染需要 WebView，内存占用明显高于 Compose 文本；
-- 原始 HTML 会写进正文缓存（`email_bodies.body_html`，库 v1 → v2 迁移），
-  一封营销邮件常见几十到几百 KB，在 50 封正文上限下可能多占数 MB 存储。
-  缓存完整性采用**三态**判定（`HtmlCacheState`）：只为「尚未问过 HTML」的邮件补取一次，
-  纯文本邮件不会被反复重下、离线也能打开（设计背景见 `docs/TESTING.md` §5.3 第 7 条）。
+- 渲染只在**详情页**发生（WebView 按需创建、离开页面立即 `destroy()`），
+  列表与同步链路不受影响；
+- WebView 禁 JS、默认禁网络（远程图片/追踪像素仍**默认屏蔽**，需要时单开）；
+- 原始 HTML 缓存在 `email_bodies.body_html`（库 v1 → v2 迁移），一封营销邮件
+  常见几十到几百 KB；缓存完整性采用**三态**判定（`HtmlCacheState`）：只为
+  「尚未问过 HTML」的邮件补取一次，纯文本邮件不会被反复重下、离线也能打开
+  （设计背景见 `docs/TESTING.md` §5.3 第 7 条）。
+
+低配手表可在设置里关闭退回纯文本（最省内存与存储；关闭后新下载的正文不再
+写 HTML 列，已缓存的 HTML 仍可查看）。
 
 **安全设计**（邮件 HTML 是不可信内容，这是本功能最关键的部分）：
 
@@ -241,7 +246,7 @@ HTML 渲染作为**用户显式开启**的增强功能存在（`AppSettings.html
 | `blockNetworkLoads = true`（默认） | 远程图片 / 追踪像素 / 外部样式一律不加载；仅在用户显式打开「显示远程图片」时放行 |
 | 清理 `<script>` / `<iframe>` / `<meta http-equiv="refresh">` / `javascript:` 伪协议 | 去掉**无需 JS 也能生效**的攻击面（meta refresh 可跳转、iframe 可加载外部内容） |
 | 关闭 `allowFileAccess` / `allowContentAccess` | 防止 `file://` / `content://` 读取本机数据 |
-| 链接点击一律拦截（`shouldOverrideUrlLoading` 返回 true） | 手表上没有浏览器，避免用户困在 WebView 中 |
+| 链接默认拦截且 WebView 绝不导航（`shouldOverrideUrlLoading` 返回 true） | 保持内容沙箱化；设置「打开邮件内链接」开启后由**外部浏览器**打开 http/https（失败浮层提示），WebView 自身仍不导航 |
 | 离开页面 `destroy()` | WebView 持有原生资源，不销毁会在手表上泄漏内存 |
 
 **适配**：WebView 全屏铺满，圆屏安全边距由文档自身的 CSS 提供
@@ -265,9 +270,9 @@ HTML 渲染作为**用户显式开启**的增强功能存在（`AppSettings.html
 | 功耗 | 后台同步交给 WorkManager（系统统一调度，≥15 分钟）；前台同步随界面可见性启停；Wi-Fi 可选约束；IDLE 仅在支持时启用 |
 | 网络耗时 | JavaMail 超时属性显式设置；`Dispatchers.IO` 承载所有阻塞 IO |
 
-> **实测数据（本机构建验证）**：debug APK **27.75 MB**；release APK 经 R8 压缩+混淆+优化 + 资源压缩后
-> **3.48 MB**（体积下降 88%，对 512MB–1GB 内存的手表更友好）；
-> 273 个单元测试用例耗时合计约 **0.5 秒**（纯 JVM，无需设备）。
+> **实测数据（本机构建验证）**：debug APK **28.06 MB**；release APK 经 R8 压缩+混淆+优化 + 资源压缩后
+> **3.51 MB**（体积下降 88%，对 512MB–1GB 内存的手表更友好）；
+> 285 个单元测试用例耗时合计约 **0.5 秒**（纯 JVM，无需设备）。
 > 冷启动耗时、列表帧率、同步耗时、内存峰值需真机 Profiler 验证，见 `docs/TESTING.md` §6。
 
 ## 6. 关键设计取舍

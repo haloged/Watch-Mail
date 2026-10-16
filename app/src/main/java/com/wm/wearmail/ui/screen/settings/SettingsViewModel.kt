@@ -333,6 +333,31 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /**
+     * 开关「打开邮件内链接」（仅在 HTML 渲染开启时有意义）。
+     *
+     * 开启后，邮件详情里点击 http/https 链接会交给默认浏览器打开；
+     * 手表上没有可用浏览器时详情页会浮层提示，而不是静默失败。
+     */
+    fun setOpenLinksInBrowser(enabled: Boolean) {
+        viewModelScope.launch {
+            val ok = runCatching {
+                container.settings.update { it.copy(openLinksInBrowser = enabled) }
+            }.isSuccess
+            Logs.i(TAG, "链接外部打开开关：$enabled")
+            _events.tryEmit(
+                if (ok) {
+                    SettingsEvent.Message(
+                        if (enabled) "已开启：点击邮件链接用浏览器打开" else "已关闭：邮件链接不可点击",
+                        success = true,
+                    )
+                } else {
+                    SettingsEvent.Message("设置失败", false)
+                },
+            )
+        }
+    }
+
     // ------------------------------------------------------------------
     // 通知自检与测试通知
     // ------------------------------------------------------------------

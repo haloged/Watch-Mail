@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 路径白名单（应用内更新）。
+  只暴露 filesDir/updates/ —— 下载的 APK 存放处，其余内部文件一律不对外。
+-->
+<paths>
+    <files-path
+        name="updates"
+        path="updates/" />
+</paths>

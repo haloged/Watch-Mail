@@ -298,8 +298,8 @@ fun SettingsScreen(
             }
 
             // ---------------- 邮件正文 ----------------
-            // HTML 渲染**默认关闭**：需要 WebView（内存明显高于纯文本），且缓存里会多存一份
-            // 原始 HTML。只在性能足够、用户确实需要看排版的设备上开启。
+            // HTML 渲染**默认开启**（开箱即有排版）；渲染只在详情页发生（WebView 按需创建），
+            // 缓存里会多存一份原始 HTML —— 低配手表可在设置里关掉退回纯文本
             settingsSlot(index++, listState) { modifier ->
                 SectionHeader(text = "邮件正文", modifier = modifier)
             }
@@ -339,6 +339,18 @@ fun SettingsScreen(
                         modifier = modifier.fillMaxWidth(),
                         secondaryLabel = { Text(text = "可能被用于追踪已读", maxLines = 1) },
                         label = { Text(text = "显示远程图片", maxLines = 1) },
+                    )
+                }
+
+                // 链接默认不可点击（手表上跳出应用是重操作，且链接指向站外内容）；
+                // 开启后点击邮件内 http/https 链接会交给默认浏览器
+                settingsSlot(index++, listState) { modifier ->
+                    SwitchButton(
+                        checked = state.settings.openLinksInBrowser,
+                        onCheckedChange = { vm.setOpenLinksInBrowser(it) },
+                        modifier = modifier.fillMaxWidth(),
+                        secondaryLabel = { Text(text = "跳转到默认浏览器", maxLines = 1) },
+                        label = { Text(text = "打开邮件内链接", maxLines = 1) },
                     )
                 }
             }

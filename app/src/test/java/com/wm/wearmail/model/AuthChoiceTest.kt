@@ -25,7 +25,8 @@ class AuthChoiceTest {
 
     @Test
     fun `只有密码类时只显示密码选项`() {
-        val choices = AuthChoice.forTypes(listOf(AuthType.PASSWORD))
+        // 这是「非 Outlook 预设」与扫码页的真实输入（OAuth2 为 Outlook 专属）
+        val choices = AuthChoice.forTypes(listOf(AuthType.PASSWORD, AuthType.APP_PASSWORD))
         assertEquals(listOf("密码/授权码"), choices.map { it.label })
     }
 

@@ -29,6 +29,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- WorkManager 后台同步在极端情况下需要唤醒锁 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 应用内更新：下载完成后拉起系统安装器（Android 8.0+ 安装 APK 必需） -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".core.WearMailApp"
@@ -66,6 +68,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          应用内更新的 APK 分发：安装器不接受 file:// 的 APK（StrictMode 会拦截），
+          因此用 FileProvider 把 filesDir/updates/ 下的下载产物以 content:// 暴露，
+          仅授予安装器一次性读权限（exported=false + grantUriPermissions）。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

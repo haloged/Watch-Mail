@@ -80,6 +80,7 @@ class SettingsStoreImpl(context: Context) : SettingsStore {
             microsoftOAuthTenant = prefs.getString(KEY_MS_TENANT, defaults.microsoftOAuthTenant).orEmpty(),
             htmlRenderingEnabled = prefs.getBoolean(KEY_HTML_RENDER, defaults.htmlRenderingEnabled),
             remoteImagesEnabled = prefs.getBoolean(KEY_REMOTE_IMAGES, defaults.remoteImagesEnabled),
+            openLinksInBrowser = prefs.getBoolean(KEY_OPEN_LINKS, defaults.openLinksInBrowser),
         )
     }
 
@@ -97,6 +98,7 @@ class SettingsStoreImpl(context: Context) : SettingsStore {
             .putString(KEY_MS_TENANT, settings.microsoftOAuthTenant)
             .putBoolean(KEY_HTML_RENDER, settings.htmlRenderingEnabled)
             .putBoolean(KEY_REMOTE_IMAGES, settings.remoteImagesEnabled)
+            .putBoolean(KEY_OPEN_LINKS, settings.openLinksInBrowser)
             .apply()
     }
 
@@ -118,9 +120,10 @@ class SettingsStoreImpl(context: Context) : SettingsStore {
         private const val KEY_MS_CLIENT_ID = "microsoft_oauth_client_id"
         private const val KEY_MS_TENANT = "microsoft_oauth_tenant"
 
-        /** 正文渲染：是否渲染 HTML、是否允许加载远程图片 */
+        /** 正文渲染：是否渲染 HTML、是否允许加载远程图片、是否用浏览器打开链接 */
         private const val KEY_HTML_RENDER = "html_rendering_enabled"
         private const val KEY_REMOTE_IMAGES = "remote_images_enabled"
+        private const val KEY_OPEN_LINKS = "open_links_in_browser"
 
         /** 被关闭通知的账户 id 集合（存字符串，Long 无 StringSet 支持） */
         private const val KEY_NOTIF_DISABLED_ACCOUNTS = "notif_disabled_accounts"
