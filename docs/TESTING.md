@@ -71,11 +71,12 @@ python tools/test_summary.py
 | `UpdateJsonTest` | 9 | GitHub Releases 响应解析：完整字段、`body=null`、字段缺失/空白、非法 JSON 均安全返回 null；**assets 资产挑选（优先 release 命名、回退首个 APK、拒绝非 https）** | 检查更新（响应解析 / 应用内下载地址） |
 | `ApkDownloaderTest` | 9 | 加速候选（gh-proxy 前缀只加给 GitHub 链接）、速度过慢判定（窗口未满不判 / 低于 24KB/s 判过慢 / 持平不判）、进度百分比（含未知总大小的 -1 与越界防御）、Release 说明清洗（Markdown 标记、空串、限长截断） | 应用内更新（下载策略与更新日志） |
 | `AuthChoiceTest` | 5 | 两个密码枚举合并为一个「密码/授权码」选项、顺序稳定、选中判定（PASSWORD 与 APP_PASSWORD 都能落到合并项）、任何允许的认证方式都有匹配选项 | 登录方式合并（防选中态丢失） |
-| **合计** | **285** | | |
+| `PairingExportTest` | 3 | 手表 → 手机配置导出：字段与版本、OAuth2 令牌组（带令牌不带密码）、空列表边界 | 扫码同步到手机 |
+| **合计** | **288**（另有 phone 模块 `PhoneSyncTest` 7 例） | | |
 
 ## 4. 静态检查
 
-`tools/static_checks.py` 的检查项与失败含义（**24 项全部通过**）：
+`tools/static_checks.py` 的检查项与失败含义（**26 项全部通过**）：
 
 | 检查 | 失败含义 |
 |------|---------|
@@ -101,6 +102,8 @@ python tools/test_summary.py
 | **交互反馈使用浮层提示** | 添加账户页 / 设置页的提示重新渲染进列表内容：入口与提示处在不同滚动位置时会互相看不见（真机反馈 ×2 的「点击后没有任何提示」）；断言 `ToastHost` 组件存在且两个页面在使用 |
 | **邮件链接开关与外部打开** | 详情页不再消费 `openLinksInBrowser`（开关形同虚设）、WebView 脱离沙箱自行导航（缺 `shouldOverrideUrlLoading` 拦截）、或不再经 `ACTION_VIEW` 交给外部浏览器 |
 | **应用内更新下载链路** | UpdateJson 不再解析 APK 资产（拿不到安装包）、下载器丢失 gh-proxy 加速前缀或速度过慢判定（慢速直连永不回退）、弹窗未接下载器/安装器、Manifest 缺 `REQUEST_INSTALL_PACKAGES` 或 FileProvider（下载后装不上） |
+| **手机配套应用同步链路** | 手表端缺 `PairingExport` / `/export` 路由（手机拉不到配置）；手机模块未在 `:phone` 中声明、Manifest 缺前台服务或通知权限（收信静默失败）；手机端未加密存储凭据（明文落盘）、未做增量收信或未发通知；**手机主界面出现邮件查看调用**（越界提供查看邮件） |
+| **IMAP 客户端身份（RFC 2971）** | `ImapClientImpl` 未在连接后发送 IMAP ID，或只在普通连接发送、IDLE 重连时漏发（**网易 163/126 会拒绝收信：Unsafe Login**）；手机模块复制的实现同样必须包含 |
 | Kotlin 括号配平 | 明显的语法破损 |
 | 每个 Kotlin 文件声明包名 | 文件头缺失 `package`，构建失败 |
 
@@ -114,8 +117,8 @@ python tools/test_summary.py
 | 任务 | 结果 | 产物 |
 |------|------|------|
 | `:app:testDebugUnitTest` | ✅ 285 / 285 通过 | `app/build/reports/tests/testDebugUnitTest/index.html` |
-| `:app:assembleDebug` | ✅ BUILD SUCCESSFUL（**28.06 MB**） | `app/build/outputs/apk/debug/app-debug.apk` |
-| `:app:assembleRelease`（R8 压缩+混淆+优化 + 资源压缩） | ✅ BUILD SUCCESSFUL（**3.51 MB**） | `app/build/outputs/apk/release/app-release.apk` |
+| `:app:assembleDebug` | ✅ BUILD SUCCESSFUL（**28.17 MB**） | `app/build/outputs/apk/debug/app-debug.apk` |
+| `:app:assembleRelease`（R8 压缩+混淆+优化 + 资源压缩） | ✅ BUILD SUCCESSFUL（**3.52 MB**） | `app/build/outputs/apk/release/app-release.apk` |
 
 代码规模：主源码 87 个 Kotlin 文件 / 约 18,460 行，测试 21 个文件 / 约 3,410 行。
 编译期仅有弃用警告（`Icons.Filled.ArrowBack` 等迁移到 `Icons.AutoMirrored`，
@@ -256,6 +259,7 @@ Material Icons 1.7.7 的 deprecation），不影响功能。
 | 3（P1） | **「HTML 渲染」开关看起来不生效** | 详情页用 `remember(emailId){ mutableStateOf(canRenderHtml) }`，首帧 `html` 尚为 null 就把开关固化成 false | 改为「用户选择优先，否则跟随 HTML 可用性」（`htmlUserChoice ?: canRenderHtml`） |
 | 4（P1） | **纯文本邮件被反复重下正文、离线打不开** | `body_html` 的 NULL 兼当「没问过服务器」与「问了但没有」；开启 HTML 渲染后这类邮件永远被判「缓存不完整」→ 走网络分支，离线直接报错 | 新增 `HtmlCacheState` 三态（NULL / 空串 / 非空文本）；`SyncEngine` 只在 `UNKNOWN` 时补取、离线回退已缓存的纯文本；`HtmlCacheStateTest`（8 例）+ 静态检查「正文 HTML 缓存三态语义」（已用缺陷版本验证规则会 FAIL） |
 | 5（P1） | **预设自动回填会覆盖用户选好的加密方式** | `AddAccountViewModel.applyDetectedPresetIfEmpty` 对主机/端口「只在为空时填」，对加密方式却无条件覆盖 | 主机/端口/加密方式视为配套三元组：只有对应主机为空时才整组回填 |
+| 6（P0） | **网易邮箱（163/126）完全无法同步（Unsafe Login）** | 网易为账号安全要求客户端在 IMAP 登录后发送 RFC 2971 的 `ID` 声明身份；`ImapClientImpl` 此前未发送 → 网易直接拒绝收信，真机表现为「同步一直失败」 | 新增 `sendImapId()`，在**普通连接与 IDLE 重连**后调用 `IMAPStore.id(name/version/vendor)`；不支持 ID 命令的服务器忽略失败（不影响其他服务商）。静态检查「IMAP 客户端身份」覆盖手表端与手机端（已用缺陷版本验证规则会 FAIL） |
 
 连带修复（与 #1 同一路径）：`OAuthTokenService.freshSecrets` 对「手机扫码粘贴令牌」的
 OAuth2 账户（令牌存在密码列）一律报「尚未完成授权」，现改为放行密码非空的情况。
@@ -287,14 +291,14 @@ OAuth2 账户（令牌存在密码列）一律报「尚未完成授权」，现�
 python tools/static_checks.py
 ```
 
-静态检查结果：**24 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
+静态检查结果：**26 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
 统一日志门面、无 `System.out`、加解密不依赖 `android.util.Base64`、
 **AES-GCM 与 Android Keystore 兼容**、**圆屏纵向预算**、**覆盖层不透明且拦截指针**、
 **账户密文列写入语义（SecretWrite）**、**正文 HTML 缓存三态语义**、
 **列表项坐标换算（内容坐标→屏幕坐标）**、Outlook 认证方式仅 OAuth2、release 启用 R8 优化、
 **检查更新链路约束**、OAuth2 配置独立页面、**微软邮箱禁止扫码配置**、
 扫码配置 Wi-Fi 前置检查、**交互反馈使用浮层提示**、**邮件链接开关与外部打开**、
-**应用内更新下载链路**、括号配平、包名声明）。
+**应用内更新下载链路**、**手机配套应用同步链路**、**IMAP 客户端身份（RFC 2971）**、括号配平、包名声明）。
 
 ### 5.5 构建环境说明（不影响交付物本身）
 
@@ -457,3 +461,28 @@ python tools/static_checks.py
       应能跳转到系统授权页，授权后重新下载可完成安装；
     - 下载中点「取消」或关闭弹窗：下载中止，无残留文件（`filesDir/updates/` 下无 `.part`）；
     - 断网重试：失败提示 + 「重试」按钮，恢复网络后重试可成功。
+42. **连接手机云通知（腕邮手机）**：手表「**设置 → 手机云通知 → 连接手机云通知**」应显示
+    二维码（未连 Wi-Fi 时直接提示、不出码）；同一分组下的「下载手机版」应弹出指向
+    GitHub Releases 的二维码。在手机上安装 `dist/wearmail-phone-release.apk` 后扫码：
+    - 手机显示「已同步 N 个账户」，手表面板同步变为「已同步 N 个账户 ✓」；
+    - 手机端账户卡片只展示邮箱与服务器地址（**没有任何查看邮件的入口**）；
+    - 手机通知栏出现「WearMail 正在收信」常驻通知（首次使用需授予通知权限）；
+    - 在手表上关闭面板后，再扫码应提示链接失效（面板关闭即关端口）；
+    - **扫码界面必须为竖屏**（v1.2.3 起用自定义 `PortraitCaptureActivity` 固定竖屏——
+      库里 `setOrientationLocked(true)` 只是「锁定当前方向」，横握手机时仍会横屏）；
+    - **OAuth2（Outlook）账户**同样应出现在账户列表并正常收信（手机端自动续期令牌）；
+    - 可切换「自动同步间隔」（1/5/15 分钟），切换后新邮件应在对应时间内提醒；
+    - 「发送测试通知」应立即弹出一条「测试通知」；
+    - **首次启动**应弹出使用说明（OPPO 健康通知权限 + 后台保活），点「我知道了」后不再出现；
+    - **同 Wi-Fi 扫码失败排查**（v1.3.0 修复明文流量拦截）：若仍失败，先确认手机端已安装
+      本版（Manifest 含 `usesCleartextTraffic`），再看 logcat 是否有 `Cleartext ... not permitted`。
+43. **手机通知到达手表（OPPO 场景）**：给已同步的账户发一封邮件（约 1 分钟内）：
+    - 手机应弹出「发件人 + 主题」的通知；点击通知只打开同步状态页（不是邮件内容）；
+    - OPPO 手表与手机配对后，手表应**自动显示同一条通知**（这就是绕开手表端通知限制的路径）；
+    - 关闭「新邮件通知」开关后再发邮件不再提醒（账户仍正常收信）；
+    - 断网 1 分钟后恢复：应自动恢复收信（无需重开应用）。
+
+44. **网易邮箱（163 / 126）**：用应用专用密码添加 163 账户（IMAP/SMTP 预设）：
+    - 「验证连接」应成功，首次同步能拉到邮件列表；logcat 不应出现 `Unsafe Login`；
+    - 若出现 `Unsafe Login`，说明 IMAP ID（RFC 2971）未发送——检查 `ImapClientImpl.sendImapId`；
+    - 手机端（腕邮手机）同步该账户后同样能收信并发出通知。

@@ -95,6 +95,13 @@ class ConfigWebServer(
                 contentType = "text/plain; charset=utf-8",
                 body = body.toByteArray(StandardCharsets.UTF_8),
             )
+
+            /** JSON 响应（手机配套应用的配置导出） */
+            fun json(body: String, status: Int = 200): HttpResponse = HttpResponse(
+                status = status,
+                contentType = "application/json; charset=utf-8",
+                body = body.toByteArray(StandardCharsets.UTF_8),
+            )
         }
     }
 

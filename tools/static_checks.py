@@ -428,7 +428,7 @@ def strip_strings_and_comments(text: str) -> str:
 
 def check_kotlin_balance(report: Report, root: Path) -> None:
     problems: list[str] = []
-    files = sorted(root.glob("app/src/**/*.kt"))
+    files = sorted(root.glob("app/src/**/*.kt")) + sorted(root.glob("phone/src/**/*.kt"))
     for path in files:
         text = strip_strings_and_comments(path.read_text(encoding="utf-8", errors="ignore"))
         for open_ch, close_ch, label in (("{", "}", "花括号"), ("(", ")", "圆括号"), ("[", "]", "方括号")):
@@ -441,7 +441,8 @@ def check_kotlin_balance(report: Report, root: Path) -> None:
 
 def check_package_declared(report: Report, root: Path) -> None:
     problems: list[str] = []
-    for path in sorted(root.glob("app/src/**/*.kt")):
+    files = sorted(root.glob("app/src/**/*.kt")) + sorted(root.glob("phone/src/**/*.kt"))
+    for path in files:
         text = path.read_text(encoding="utf-8", errors="ignore")
         if not re.search(r"^package\s+com\.wm\.wearmail", text, re.M):
             problems.append(str(path.relative_to(root)))
@@ -1132,6 +1133,190 @@ def check_inapp_update_download(report: Report, root: Path) -> None:
     report.check("应用内更新下载链路", not problems, "; ".join(problems[:6]))
 
 
+def check_imap_identity(report: Report, root: Path) -> None:
+    """
+    IMAP 客户端身份声明（RFC 2971）。
+
+    背景（真机反馈）：网易（163/126）为账号安全要求客户端在登录后发送 IMAP ID，
+    否则收信返回 `Unsafe Login. Please contact kefu@188.com for help`，同步完全不可用。
+    防回归锚点：
+    - ImapClientImpl 在连接成功后调用 sendImapId（**普通连接 + IDLE 重连两处**都要有，
+      否则长连接重连后又会失败）；
+    - 身份字段包含 name / version / vendor；
+    - 手机模块复制的 ImapClientImpl 同样具备（否则手机收信遇到网易必失败）。
+    """
+    problems: list[str] = []
+    targets = [
+        ("手表端", root / "app/src/main/java/com/wm/wearmail/mail/ImapClientImpl.kt"),
+        ("手机端", root / "phone/src/main/java/com/wm/wearmail/mail/ImapClientImpl.kt"),
+    ]
+    for label, path in targets:
+        if not path.exists():
+            problems.append(f"[{label}] 缺少 ImapClientImpl.kt")
+            continue
+        text = strip_comments(path.read_text(encoding="utf-8", errors="ignore"))
+        if "IMAPStore" not in text or ".id(" not in text:
+            problems.append(f"[{label}] 未发送 IMAP ID（网易会拒绝收信：Unsafe Login）")
+        if text.count("sendImapId(") < 3:
+            problems.append(f"[{label}] IMAP ID 调用点不足（普通连接 + IDLE 重连都要发）")
+        if '"name"' not in text or '"vendor"' not in text or '"version"' not in text:
+            problems.append(f"[{label}] IMAP ID 字段不完整（name/version/vendor）")
+
+    report.check("IMAP 客户端身份（RFC 2971）", not problems, "; ".join(problems[:6]))
+
+
+def check_phone_companion_sync(report: Report, root: Path) -> None:
+    """
+    手机配套应用的同步链路（手表导出配置 → 手机扫码拉取 → 手机收信发通知）。
+
+    需求背景：OPPO 等手表系统限制手表端应用通知，但会同步**手机通知**。
+    配套手机应用扫码同步手表账户配置后由手机收信发通知，通知即可到达手表。
+    手机端**只同步与提醒，不提供查看邮件的界面**。
+
+    防回归锚点：
+    - 手表端导出：PairingExport 的 schema key、ConfigWebServer 的 /export 路由；
+    - 模块与权限：settings.gradle 的 :phone、Manifest 的前台服务与通知权限；
+    - 手机端四个落点：扫码、加密存储、增量收信、发通知；
+    - 手机主界面不得出现「打开邮件正文/详情」的调用（越界查看邮件）。
+    """
+    problems: list[str] = []
+    java_root = root / "app/src/main/java/com/wm/wearmail"
+    phone_root = root / "phone/src/main/java/com/wm/wearmail/phone"
+
+    export = java_root / "pairing/PairingExport.kt"
+    if not export.exists():
+        problems.append("缺少手表端 pairing/PairingExport.kt（配置导出）")
+    else:
+        text = strip_comments(export.read_text(encoding="utf-8", errors="ignore"))
+        if '"accounts"' not in text:
+            problems.append("PairingExport 缺少 accounts 字段（手机端无法解析）")
+
+    controller = java_root / "pairing/PairingController.kt"
+    if not controller.exists():
+        problems.append("缺少 PairingController.kt")
+    else:
+        # 必须剥注释：KDoc 里提到 /export 是说明文字，不能当成「路由存在」
+        text = strip_comments(controller.read_text(encoding="utf-8", errors="ignore"))
+        if "/export" not in text:
+            problems.append("PairingController 缺少 /export 路由（手机端拉不到配置）")
+
+    settings = root / "settings.gradle.kts"
+    if not settings.exists() or 'include(":phone")' not in settings.read_text(encoding="utf-8", errors="ignore"):
+        problems.append('settings.gradle.kts 未包含 :phone 模块')
+
+    manifest = root / "phone/src/main/AndroidManifest.xml"
+    if not manifest.exists():
+        problems.append("缺少 phone 模块的 AndroidManifest.xml")
+    else:
+        text = manifest.read_text(encoding="utf-8", errors="ignore")
+        if "FOREGROUND_SERVICE" not in text:
+            problems.append("手机 Manifest 缺少前台服务权限（常驻收信会失败）")
+        if "POST_NOTIFICATIONS" not in text:
+            problems.append("手机 Manifest 缺少通知权限（Android 13+ 通知发不出）")
+        if 'usesCleartextTraffic="true"' not in text:
+            problems.append(
+                "手机 Manifest 未允许局域网明文 HTTP（Android 9+ 会拦截扫码同步，"
+                "真机表现为『同步失败』）",
+            )
+
+    store = phone_root / "data/PhoneStore.kt"
+    if not store.exists():
+        problems.append("缺少手机端 PhoneStore.kt（加密存储）")
+    else:
+        text = strip_comments(store.read_text(encoding="utf-8", errors="ignore"))
+        if "crypto.encrypt" not in text:
+            problems.append("PhoneStore 未加密账户配置（凭据会明文落盘）")
+
+    service = phone_root / "service/MailSyncService.kt"
+    if not service.exists():
+        problems.append("缺少手机端 MailSyncService.kt（收信服务）")
+    else:
+        text = strip_comments(service.read_text(encoding="utf-8", errors="ignore"))
+        if "fetchNewerThan" not in text:
+            problems.append("MailSyncService 未做增量收信（fetchNewerThan）")
+        if "notifyNewMail" not in text:
+            problems.append("MailSyncService 未发新邮件通知")
+
+    ui = phone_root / "ui/MainActivity.kt"
+    if not ui.exists():
+        problems.append("缺少手机端 MainActivity.kt")
+    else:
+        text = strip_comments(ui.read_text(encoding="utf-8", errors="ignore"))
+        if "ScanContract" not in text:
+            problems.append("手机主界面缺少扫码入口（ScanContract）")
+        if "setOrientationLocked(false)" in text:
+            problems.append("扫码界面未锁定竖屏（真机反馈：扫码页会变成横向）")
+        if "setCaptureActivity" not in text:
+            problems.append("扫码未使用自定义竖屏 Activity（库默认会锁定为当前方向）")
+        if "EmailDetail" in text or "fetchBody" in text:
+            problems.append("手机主界面出现邮件查看调用（该应用只收信发通知，不提供查看邮件）")
+
+    # 手表端入口：同步面板必须挂在设置页（账户管理页不再放），且提供手机版下载二维码
+    settings = java_root / "ui/screen/settings/SettingsScreen.kt"
+    if not settings.exists():
+        problems.append("缺少设置页 SettingsScreen.kt")
+    else:
+        text = strip_comments(settings.read_text(encoding="utf-8", errors="ignore"))
+        if "连接手机云通知" not in text:
+            problems.append("设置页缺少「连接手机云通知」入口")
+        if "下载手机版" not in text:
+            problems.append("设置页缺少「下载手机版」入口")
+
+    download_dialog = java_root / "ui/screen/settings/PhoneAppDownloadDialog.kt"
+    if not download_dialog.exists():
+        problems.append("缺少 PhoneAppDownloadDialog.kt（下载手机版二维码）")
+    else:
+        text = strip_comments(download_dialog.read_text(encoding="utf-8", errors="ignore"))
+        if "github.com/haloged/Watch-Mail/releases" not in text:
+            problems.append("下载二维码未指向 GitHub Releases")
+
+    # 竖屏扫码页（自定义 Activity + Manifest 声明）
+    portrait = phone_root / "ui/PortraitCaptureActivity.kt"
+    if not portrait.exists():
+        problems.append("缺少 PortraitCaptureActivity.kt（扫码页竖屏）")
+    else:
+        text = strip_comments(portrait.read_text(encoding="utf-8", errors="ignore"))
+        if "SCREEN_ORIENTATION_PORTRAIT" not in text:
+            problems.append("PortraitCaptureActivity 未请求竖屏")
+
+    if manifest.exists():
+        text = manifest.read_text(encoding="utf-8", errors="ignore")
+        if 'screenOrientation="portrait"' not in text:
+            problems.append("Manifest 未固定竖屏（扫码/主界面会随设备旋转）")
+        if "腕邮手机" not in text:
+            problems.append("应用名未使用「腕邮手机」")
+
+    # 测试通知 / 同步间隔 / OAuth2 支持
+    notifier = phone_root / "notify/MailNotifier.kt"
+    if notifier.exists():
+        text = strip_comments(notifier.read_text(encoding="utf-8", errors="ignore"))
+        if "notifyTest" not in text:
+            problems.append("缺少测试通知（notifyTest）")
+    service = phone_root / "service/MailSyncService.kt"
+    if service.exists():
+        text = strip_comments(service.read_text(encoding="utf-8", errors="ignore"))
+        if "syncIntervalMinutes" not in text:
+            problems.append("收信服务未读取可配置的同步间隔")
+        if "oauth.refresh" not in text:
+            problems.append("OAuth2 账户未做令牌刷新（手机端收不到 Outlook 邮件）")
+    synced = phone_root / "data/SyncedAccount.kt"
+    if synced.exists():
+        text = strip_comments(synced.read_text(encoding="utf-8", errors="ignore"))
+        if "oauthAccessToken" not in text:
+            problems.append("SyncedAccount 未解析 OAuth2 令牌（无法同步 OAuth2 配置）")
+
+    # 手机版本必须与手表一致
+    app_gradle = root / "app/build.gradle.kts"
+    phone_gradle = root / "phone/build.gradle.kts"
+    if app_gradle.exists() and phone_gradle.exists():
+        app_ver = re.search(r'versionName\s*=\s*"([^"]+)"', app_gradle.read_text(encoding="utf-8"))
+        phone_ver = re.search(r'versionName\s*=\s*"([^"]+)"', phone_gradle.read_text(encoding="utf-8"))
+        if app_ver and phone_ver and app_ver.group(1) != phone_ver.group(1):
+            problems.append(f"手机版本（{phone_ver.group(1)}）与手表版本（{app_ver.group(1)}）不一致")
+
+    report.check("手机配套应用同步链路", not problems, "; ".join(problems[:6]))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="WearMail 静态检查")
     parser.add_argument("--root", default=str(Path(__file__).resolve().parent.parent))
@@ -1159,6 +1344,8 @@ def main() -> int:
     check_toast_feedback(report, root)
     check_links_open_toggle(report, root)
     check_inapp_update_download(report, root)
+    check_phone_companion_sync(report, root)
+    check_imap_identity(report, root)
     check_kotlin_balance(report, root)
     check_package_declared(report, root)
 

@@ -71,6 +71,9 @@ fun SettingsScreen(
     var message by remember { mutableStateOf<String?>(null) }
     // 清理缓存二次确认
     var confirmClear by remember { mutableStateOf(false) }
+    // 手机云通知：同步二维码 / 下载手机版二维码
+    var showSyncToPhone by remember { mutableStateOf(false) }
+    var showDownloadPhone by remember { mutableStateOf(false) }
 
     // 回到本页时刷新缓存统计（缓存会随同步变化）
     LaunchedEffect(active) {
@@ -355,6 +358,51 @@ fun SettingsScreen(
                 }
             }
 
+            // ---------------- 手机云通知 ----------------
+            // OPPO 等手表系统限制手表端通知，但会自动同步手机通知：
+            // 手机版扫码同步账户 → 手机收信 → 发手机通知 → 通知同步到手表
+            settingsSlot(index++, listState) { modifier ->
+                SectionHeader(text = "手机云通知", modifier = modifier)
+            }
+
+            settingsSlot(index++, listState) { modifier ->
+                Column(modifier = modifier.fillMaxWidth()) {
+                    SecondaryActionButton(
+                        text = "连接手机云通知",
+                        onClick = {
+                            haptics.tick()
+                            showSyncToPhone = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = WearIcons.Phone,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "手机与手表连同一 Wi-Fi，用 WearMail 手机版扫码同步账户；" +
+                            "由手机收信并发出手机通知，通知会自动同步到手表" +
+                            "（适用于本机通知被系统限制的手表）。",
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 6,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            settingsSlot(index++, listState) { modifier ->
+                SecondaryActionButton(
+                    text = "下载手机版",
+                    onClick = {
+                        haptics.tick()
+                        showDownloadPhone = true
+                    },
+                    modifier = modifier.fillMaxWidth(),
+                    icon = WearIcons.Download,
+                )
+            }
+
             // ---------------- 存储 ----------------
             settingsSlot(index++, listState) { modifier ->
                 SectionHeader(text = "存储", modifier = modifier)
@@ -437,6 +485,19 @@ fun SettingsScreen(
         },
         onDismiss = { confirmClear = false },
     )
+
+    // 「连接手机云通知」：局域网一次性会话二维码（手机扫码拉取全部账户配置）
+    if (showSyncToPhone) {
+        SyncToPhoneDialog(
+            pairing = container.pairing,
+            onDismiss = { showSyncToPhone = false },
+        )
+    }
+
+    // 「下载手机版」：二维码指向 GitHub Releases 下载页（手机扫码用浏览器打开）
+    if (showDownloadPhone) {
+        PhoneAppDownloadDialog(onDismiss = { showDownloadPhone = false })
+    }
 }
 
 /** 说明性文字行（居中、次要色，正文不小于 14sp 由 labelSmall/bodySmall 保证） */

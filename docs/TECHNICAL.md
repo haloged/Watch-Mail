@@ -14,10 +14,11 @@
 
 | 项目 | 结果 |
 |------|------|
-| 单元测试（纯 JVM，无需设备） | ✅ **285 / 285 通过**（22 个测试类） |
-| Debug APK | ✅ 构建成功，**28.06 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
-| Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.51 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
-| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层/密文列语义/缓存三态/坐标换算/R8 优化/更新链路/OAuth2 页面/扫码拦截/Wi-Fi 前置/浮层提示/链接开关等 23 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
+| 单元测试（纯 JVM，无需设备） | ✅ **288 / 288 通过**（23 个测试类）＋手机模块 7 / 7 |
+| Debug APK | ✅ 构建成功，**28.17 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
+| Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.52 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
+| 手机配套 APK（`:phone`，应用内更新/通知中继） | ✅ debug **26.01 MB** / release **2.73 MB** → `dist/wearmail-phone-*.apk` |
+| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层/密文列语义/缓存三态/坐标换算/R8 优化/更新链路/OAuth2 页面/扫码拦截/Wi-Fi 前置/浮层提示/链接开关/应用内更新/手机同步链路/IMAP 身份等 26 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
 | 测试报告 | [`dist/reports/test-summary.txt`](../dist/reports/test-summary.txt)、[`dist/reports/unit-tests/index.html`](../dist/reports/unit-tests/index.html) |
 | 真机端到端（IMAP/SMTP 实收实发、通知、表冠手感） | ⚠️ **未验证**，需真实手表，清单见 [docs/TESTING.md](TESTING.md) §7 |
 
@@ -48,12 +49,13 @@
 | 撰写并发送 | 收件人（常用联系人快捷选择）、主题、正文（500 字提示）、发件账户选择；`Sending → Success(✓+振动) / Failure(✗+振动+重试)` |
 | 离线草稿 | 发送失败自动存草稿，联网后自动补投（`flushPendingDrafts`） |
 | 邮件 HTML 渲染 | 设置里「渲染 HTML 邮件」开关（**默认开启**；关闭后退回纯文本、最省内存与存储）：详情页用 WebView 渲染原始 HTML，并可在「HTML / 纯文本」间切换；WebView 禁 JS、默认禁网络（屏蔽远程图片与追踪像素），HTML 先经清理；**链接默认不可点击，「打开邮件内链接」开关开启后由系统浏览器打开（仅 http/https，无浏览器时浮层提示）**；原始 HTML 缓存在 `email_bodies.body_html`（数据库 v1 → v2 迁移） |
-| IMAP 收信 | JavaMail；首次 50 封元数据、增量按 UID、IDLE 推送（支持时）、10 秒超时 |
+| IMAP 收信 | JavaMail；首次 50 封元数据、增量按 UID、IDLE 推送（支持时）、10 秒超时；连接后发送 **RFC 2971 的 IMAP ID**（name/version/vendor）——网易（163/126）等要求声明客户端身份，否则收信返回 `Unsafe Login` |
 | SMTP 发信 | JavaMail；AUTH LOGIN/PLAIN、**XOAUTH2**、SSL/TLS/STARTTLS |
 | 断线重连 | `BackoffPolicy` 指数退避（1s→60s，±20% 抖动，区分可重试错误） |
 | 数据同步策略 | 首次仅元数据、正文按需、增量 UID/SINCE、前台 5 分钟 / 后台 15–30 分钟 / 手动 |
 | 本地缓存上限 | 元数据 500 封 + 正文 50 封，超出按 LRU 淘汰 |
 | **检查更新** | 启动时自动请求 GitHub Releases 最新版本（`haloged/Watch-Mail`）并与当前版本做语义化比较，有新版本弹出**带更新日志**的提示；弹窗内**应用内直接下载** APK（直连慢/失败自动切换 gh-proxy 加速），完成后拉起系统安装器；设置页「关于」提供手动检查入口；请求在首帧后异步执行（不阻塞冷启动），失败静默、不影响其他功能 |
+| **手机配套应用「腕邮手机」**（`:phone`） | OPPO 等手表系统限制手表端通知时，可安装手机配套应用：手表「设置 → 手机云通知 → 连接手机云通知」显示二维码（同组「下载手机版」二维码指向 GitHub Releases），手机扫码拉取全部账户配置（含凭据与 OAuth2 令牌，一次性 token + 同一 Wi-Fi），由手机前台服务按**可调间隔**（1/5/15 分钟）轮询收信并发出**手机通知**（手表自动同步手机通知）。**OAuth2 账户由手机端用 refresh token + 手表配置的客户端 ID 自行续期**；首次启动弹出使用说明（OPPO 健康通知权限 + 后台保活）；提供**测试通知**入口。手机端**不提供查看邮件的界面** |
 | 圆形表盘适配 | 安全半径 210px、按 Y 坐标动态计算弦长收窄列表项、顶/底弧形区分区 |
 | 交互 | 上下滑滚动、左右滑切换页面、点击、长按菜单、表冠旋转、全操作振动反馈 |
 
@@ -228,6 +230,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 4. **附件**：列表仅用 `multipart/mixed` 启发式标记「含附件」，不下载、不展示附件内容。
 5. **文件夹管理**：IMAP 具备 `listFolders` 能力，UI 目前只使用收件箱；
    删除邮件会优先移动到 `\Trash`，否则打 `\Deleted` + EXPUNGE。
+6. **手机端的 OAuth2 依赖手表配置的客户端 ID**：手机端用 refresh token 自行续期；
+   若手表未配置客户端 ID、或 refresh token 已失效，该账户会在手机端暂停收信
+   （需回手表重新授权后重新扫码同步）。
 6. `release` 构建开启了 R8 **收缩 + 混淆 + 优化**（默认规则为 `proguard-android-optimize.txt`，
    keep 规则已覆盖 JavaMail 的反射用法），但未能通过真机回归验证压缩后的运行行为；
    如需稳妥可先关闭 `isMinifyEnabled`。R8 是否生效的验证方式：构建后检查
@@ -259,7 +264,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `.gradlehome/`、`.gradle-dist/`、`.gradle/`、`.kotlin/` | Gradle/Kotlin 缓存与本地解压的发行版（数百 MB） |
 | `.tmp/`、`.refsrc/`、`.androidhome/` | 构建过程临时目录 / 依赖源码解压目录 / Android 用户目录 |
 | `build/`、`app/build/` | 构建产物（每次构建都变） |
-| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（28.06 MB / 3.51 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
+| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（28.17 MB / 3.52 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
 | `*.iml`、`.idea/`、`.DS_Store`、`Thumbs.db` | IDE 与系统文件 |
 
 **可以（也应该）上传**：`app/src/**`、`gradle/wrapper/**`（含 `gradle-wrapper.jar`）、

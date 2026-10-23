@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
  * @param lanIp 当前 Wi-Fi 的局域网 IP，null 表示未连接 Wi-Fi
  * @param port 监听端口
  * @param submittedCount 已通过网页提交并成功保存的账户数量
+ * @param exportedCount 手机配套应用已通过扫码同步的账户数量（>0 表示同步完成）
  * @param lastMessage 最近一次成功提示（如「已保存 1 个账户」）
  * @param error 失败原因（端口被占用、未连接 Wi-Fi 等）
  */
@@ -22,6 +23,7 @@ data class PairingState(
     val lanIp: String? = null,
     val port: Int = DEFAULT_PORT,
     val submittedCount: Int = 0,
+    val exportedCount: Int = 0,
     val lastMessage: String? = null,
     val error: String? = null,
 ) {

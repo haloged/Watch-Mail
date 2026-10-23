@@ -178,6 +178,20 @@ class PairingController(private val container: AppContainer) : PairingService {
         host: String,
         port: Int,
     ): ConfigWebServer.HttpResponse {
+        // 手机配套应用：扫码同步全部账户配置（GET /export?t=<token>）
+        // 与网页配对共用同一个会话 token；导出包含明文凭据，只允许一次性会话内访问
+        if (request.path == EXPORT_PATH) {
+            val token = request.query[TOKEN_FIELD]
+            if (token != expectedToken) {
+                Logs.w(TAG, "导出请求 token 校验失败，已拒绝")
+                return ConfigWebServer.HttpResponse.text("同步链接已失效，请在手表上重新生成二维码", 403)
+            }
+            return when (request.method) {
+                "GET" -> runBlocking { handleExport() }
+                else -> ConfigWebServer.HttpResponse.text("不支持的请求方法", 405)
+            }
+        }
+
         if (request.path != PAIR_PATH) {
             return ConfigWebServer.HttpResponse.text("未找到该页面", 404)
         }
@@ -201,6 +215,35 @@ class PairingController(private val container: AppContainer) : PairingService {
 
             else -> ConfigWebServer.HttpResponse.text("不支持的请求方法", 405)
         }
+    }
+
+    /**
+     * 导出全部账户配置（手机配套应用「扫码同步」）。
+     *
+     * ⚠️ 安全边界：这是会话中唯一以**明文**（局域网 HTTP）返回凭据的端点——
+     * 与网页配对同等保护：一次性 token + 仅在用户主动开启的面板会话内可达。
+     * 导出内容（密码/令牌）**绝不写日志**；只记录账户数量。
+     */
+    private suspend fun handleExport(): ConfigWebServer.HttpResponse {
+        val accounts = runCatching { container.accounts.load() }.getOrElse { t ->
+            Logs.w(TAG, "导出配置失败：${t.javaClass.simpleName}")
+            return ConfigWebServer.HttpResponse.text("读取账户失败", 500)
+        }
+        // 凭据解不开的账户（密钥丢失/损坏）跳过：宁可少同步一个，也不要把空凭据传给手机
+        val exports = accounts.mapNotNull { account ->
+            val secrets = runCatching { container.accounts.secrets(account.id) }.getOrNull()
+            if (secrets == null || secrets.isEmpty) {
+                Logs.w(TAG, "账户 ${account.id} 凭据不可用，已跳过导出")
+                null
+            } else {
+                ExportAccount(account, secrets)
+            }
+        }
+        val clientId = container.settings.settings.value.microsoftOAuthClientId
+        val json = PairingExport.toJson(exports, clientId)
+        _state.update { it.copy(exportedCount = exports.size) }
+        Logs.i(TAG, "已导出 ${exports.size} 个账户配置给手机端")
+        return ConfigWebServer.HttpResponse.json(json)
     }
 
     /**
@@ -530,6 +573,10 @@ a { color: #8ab4f8; }
         private const val TAG = "Pairing"
 
         private const val PAIR_PATH = "/pair"
+
+        /** 手机配套应用的配置导出端点（GET /export?t=<token>） */
+        private const val EXPORT_PATH = "/export"
+
         private const val TOKEN_FIELD = "t"
 
         /** 二维码像素尺寸（466x466 表盘上留出边距） */

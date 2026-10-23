@@ -224,6 +224,8 @@ Wear Material3 的 `Button` 容器高 **52dp 且占满整行**（`FilledButtonTo
    ╰──────────────────────────╯
 ```
 
+> 手机同步入口在**设置页**（见 §5.6「手机云通知」分组），账户页只保留「添加账户」主操作。
+
 | 元素 | 位置 | 尺寸 | 说明 |
 |------|------|------|------|
 | 返回按钮 | 左上（安全区内） | 48dp 热区 | `WearIcons.Back`，回到统一收件箱（等价于右滑） |
@@ -410,6 +412,9 @@ OAuth2（Outlook）授权面板 —— 步骤 1 的登录方式为 OAuth2 时，
 | 邮件正文 | 「显示远程图片」开关（仅 HTML 开启时出现） | `SwitchButton`（副标题：可能被用于追踪已读） |
 | 邮件正文 | 「打开邮件内链接」开关（仅 HTML 开启时出现，默认关） | `SwitchButton`（副标题：跳转到默认浏览器） |
 | Outlook OAuth2 | 入口按钮「OAuth2 客户端 ID 配置」（输入框已独立成页，见 §5.7） | `SecondaryActionButton` |
+| 手机云通知 | 分组说明：由手机收信并发手机通知（手表自动同步手机通知） | 见下三行 |
+| 手机云通知 | 「连接手机云通知」按钮（下方附说明文字：同一 Wi-Fi、手机版扫码、通知自动同步到手表） | `SecondaryActionButton`（`WearIcons.Phone`） |
+| 手机云通知 | 「下载手机版」按钮 → 弹出二维码（内容为 GitHub Releases 下载页） | `SecondaryActionButton`（`WearIcons.Download`） |
 | 存储 | 邮件元数据 / 正文缓存数量 | 文本 + 「清理缓存」按钮（二次确认） |
 | 关于 | 应用名、版本、**「检查更新」按钮** | 文本 + `SecondaryActionButton` |
 

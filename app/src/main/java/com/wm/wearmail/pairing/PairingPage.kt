@@ -131,6 +131,7 @@ button:active { background: #aecbfa; }
       <p class="note" id="authHint">选择服务商后会显示获取授权码的提示。</p>
       <p class="note">IMAP / SMTP 地址<strong>可以留空</strong>：手表会按邮箱域名自动识别（Gmail / Outlook / QQ / 163 等）。
         其他邮箱请向管理员索取后填写。</p>
+      <p class="note">使用 WearMail 手机配套应用扫码，可直接同步手表上的全部账户配置（由手机收信并发出手机通知）。</p>
     </fieldset>
 
     <fieldset>

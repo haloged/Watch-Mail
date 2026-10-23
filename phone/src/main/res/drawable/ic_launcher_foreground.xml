@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动图标前景：简洁信封图形，保持在自适应图标安全区内 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 信封主体 -->
+    <path
+        android:fillColor="#FFD9E2FF"
+        android:pathData="M26,40 L82,40 L82,68 L26,68 Z" />
+    <!-- 信封封口折线 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M26,41 L54,60 L82,41"
+        android:strokeColor="#FF0B1B2B"
+        android:strokeWidth="3.5" />
+</vector>

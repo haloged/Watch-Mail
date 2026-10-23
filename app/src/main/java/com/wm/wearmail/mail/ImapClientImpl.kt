@@ -298,6 +298,8 @@ class ImapClientImpl : ImapClient {
                     credentialFor(account, secrets),
                 )
                 store = newStore
+                // 长连接重连后同样需要声明身份（网易等会拒绝未声明身份的会话）
+                sendImapId(newStore, account.imapHost)
 
                 val target = newStore.getFolder(folder)
                 target.open(Folder.READ_ONLY)
@@ -353,6 +355,29 @@ class ImapClientImpl : ImapClient {
     // ------------------------------------------------------------------
 
     /** 建立 Store、执行 [block]、必定关闭连接；所有异常统一包装为 [MailError] */
+    /**
+     * 发送 RFC 2971 的 IMAP ID（客户端身份声明）。
+     *
+     * 为什么必须：网易（163/126）为账号安全要求客户端表明身份，否则收信会返回
+     * `Unsafe Login. Please contact kefu@188.com for help`（官方要求 JavaMail 1.5.1+
+     * 在 `store.connect(...)` 之后调用 `((IMAPStore) store).id(map)`）。
+     *
+     * 兼容性：部分老服务器不支持 ID 命令（返回 BAD），因此**忽略失败**——
+     * 发 ID 是增强兼容性，不能让原本可用的服务器因此不可用。
+     */
+    private fun sendImapId(store: Store, host: String) {
+        val imapStore = store as? IMAPStore ?: return
+        val identity = mapOf(
+            "name" to CLIENT_NAME,
+            "version" to CLIENT_VERSION,
+            "vendor" to CLIENT_NAME,
+        )
+        val sent = runCatching { imapStore.id(identity) }.isSuccess
+        if (!sent) {
+            Logs.d(TAG, "IMAP ID 未发送成功（服务器可能不支持 RFC 2971）：host=$host")
+        }
+    }
+
     private suspend fun <T> withStore(
         account: Account,
         secrets: AccountSecrets,
@@ -369,6 +394,9 @@ class ImapClientImpl : ImapClient {
                 account.email,
                 credentialFor(account, secrets),
             )
+            // RFC 2971：网易（163/126）等要求客户端在登录后声明身份，
+            // 否则后续收信会被拒绝并报 "Unsafe Login. Please contact kefu@188.com"
+            sendImapId(store, account.imapHost)
             Logs.d(TAG, "IMAP 已连接：host=${account.imapHost} port=${account.imapPort} protocol=$protocol")
             try {
                 Result.success(block(store))
@@ -841,6 +869,12 @@ class ImapClientImpl : ImapClient {
 
     private companion object {
         const val TAG = "ImapClient"
+
+        /** RFC 2971 身份声明的客户端名（网易等据此判断"是否为已知客户端"） */
+        const val CLIENT_NAME = "WearMail"
+
+        /** 协议级客户端版本（仅用于身份声明，不随发版号变化） */
+        const val CLIENT_VERSION = "1.0.0"
 
         /** 不支持 IDLE 时的轮询间隔：需求规定 30 秒 */
         const val POLL_INTERVAL_MILLIS = 30_000L

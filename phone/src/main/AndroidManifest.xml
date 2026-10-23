@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WearMail 手机配套应用（com.wm.wearmail.phone）
+  - 只做两件事：扫码同步手表配置、收信后发手机通知（不提供任何查看邮件的界面）
+  - 前台服务常驻收信（Android 14+ 需声明 dataSync 类型）
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 网络：IMAP 收信 + 局域网扫码同步 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- 扫码需要相机；没有相机的设备仍可手动输入地址（降级路径） -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- Android 13+ 通知运行时权限 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 常驻收信服务（Android 14+ 需要显式声明 dataSync 类型） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!--
+      局域网同步使用明文 HTTP（http://192.168.x.x:8080/export）：
+      Android 9+ 默认禁止明文流量，不开启则扫码同步必然失败（表现为「同步失败」）。
+      仅用于同一 Wi-Fi 内的一次性 token 会话；邮件协议本身始终走 TLS/STARTTLS。
+    -->
+    <application
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="腕邮手机"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+
+        <activity
+            android:name="com.wm.wearmail.phone.ui.MainActivity"
+            android:exported="true"
+            android:label="腕邮手机"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          扫码页：固定竖屏。库自带的 CaptureActivity 会把方向「锁定为当前方向」，
+          横握手机扫码时界面会变成横向（真机反馈），因此使用自定义的 PortraitCaptureActivity。
+        -->
+        <activity
+            android:name="com.wm.wearmail.phone.ui.PortraitCaptureActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:stateNotNeeded="true"
+            android:theme="@style/zxing_CaptureTheme"
+            android:windowSoftInputMode="stateAlwaysHidden" />
+
+        <!-- 收信与通知（前台服务：短轮询 IMAP，新邮件即发本地通知） -->
+        <service
+            android:name="com.wm.wearmail.phone.service.MailSyncService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+    </application>
+
+</manifest>
