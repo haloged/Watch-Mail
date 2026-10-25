@@ -9,7 +9,7 @@
 ![Platform](https://img.shields.io/badge/Wear%20OS-3.0%2B%20(API%2030%2B)-blue)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-7F52FF)
 ![Compose](https://img.shields.io/badge/Compose%20for%20Wear-1.5.6-4285F4)
-![Tests](https://img.shields.io/badge/tests-288%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-289%20passing-brightgreen)
 ![Static checks](https://img.shields.io/badge/static%20checks-26%20passing-brightgreen)
 ![APK](https://img.shields.io/badge/release%20APK-3.52%20MB-informational)
 
@@ -22,7 +22,7 @@
 一个**完整的、可编译运行的** Wear OS 邮箱客户端：手写 SQLite + JavaMail 收信发信、Android Keystore
 加密保管凭据、局域网扫码从手机配置账户、Outlook/Office 365 走 OAuth2 设备码流。
 
-项目不是"能跑就行"的演示：**293 个纯 JVM 单元测试（手表端 288 + 手机端 7） + 26 项静态检查**全绿，圆屏布局按几何公式推导，
+项目不是"能跑就行"的演示：**294 个纯 JVM 单元测试（手表端 289 + 手机端 7） + 26 项静态检查**全绿，圆屏布局按几何公式推导，
 每一处设计取舍与踩过的坑都写在文档里（包括**至今仍未在真机验证的部分**）。
 
 - **多账户统一收件箱**：Gmail / Outlook / QQ / 163 等预设加自定义服务器，IMAP 收信、SMTP 发信，
@@ -57,7 +57,7 @@ app/src/main/java/com/wm/wearmail/
 ├── update/    UpdateCenter · GitHubUpdateChecker · ApkDownloader · ApkInstaller
 ├── ui/        theme/ · kit/ · nav/ · screen/{inbox,detail,compose,accounts,settings}
 └── util/      TimeFormat
-app/src/test/  23 个测试类 / 288 个用例
+app/src/test/  23 个测试类 / 289 个用例
 phone/src/main/java/com/wm/wearmail/phone/
 ├── data/      PairingUrl · SyncedAccount（配置解析）· PhoneStore（加密存储）
 ├── net/       ConfigSync（拉取手表配置）

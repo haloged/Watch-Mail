@@ -1091,6 +1091,10 @@ def check_inapp_update_download(report: Report, root: Path) -> None:
         text = strip_comments(info.read_text(encoding="utf-8", errors="ignore"))
         if "apkUrl" not in text or "browser_download_url" not in text:
             problems.append("UpdateJson 未解析 APK 资产（apkUrl / browser_download_url）")
+        if "PHONE_APK_KEYWORD" not in text or '"phone"' not in text:
+            problems.append(
+                "UpdateJson 未排除手机版 APK（手表包与手机包同时上传时会下错包，安装必失败）",
+            )
 
     downloader = java_root / "update/ApkDownloader.kt"
     if not downloader.exists():

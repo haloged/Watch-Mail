@@ -55,8 +55,14 @@ object UpdateJson {
     /**
      * 从 `assets` 里挑一个 APK 下载地址。
      *
-     * 规则：优先文件名含 `release` 的（正式包，避免误取 debug 包），
-     * 否则取第一个 `.apk`；只接受 https 地址。找不到时返回 null。
+     * 规则（按顺序）：
+     * 1. 只接受 `.apk` 结尾且为 https 的附件；
+     * 2. **排除手机配套应用的安装包**（文件名含 `phone`）—— 同一个 Release 里常同时上传
+     *    手表包与手机包，手表端若下到手机包会安装失败；
+     * 3. 优先文件名含 `release` 的（正式包，避免误取 debug 包），否则取第一个 .apk；
+     * 4. 多个候选时按 GitHub 返回的 assets 顺序取第一个。
+     *
+     * 找不到时返回 null（弹窗降级为「打开下载页」）。
      */
     private fun pickApkUrl(obj: JSONObject): String? {
         val assets = obj.optJSONArray("assets") ?: return null
@@ -67,11 +73,16 @@ object UpdateJson {
             val url = asset.optString("browser_download_url")
             if (!name.endsWith(".apk", ignoreCase = true)) continue
             if (!url.startsWith("https://")) continue
+            // 手机配套应用的 APK 不能装到手表上（两个 release 包同时上传时尤为重要）
+            if (name.contains(PHONE_APK_KEYWORD, ignoreCase = true)) continue
             if (name.contains("release", ignoreCase = true)) return url
             if (fallback == null) fallback = url
         }
         return fallback
     }
+
+    /** 手机配套应用安装包的文件名关键字（`wearmail-phone-release.apk` 等） */
+    private const val PHONE_APK_KEYWORD = "phone"
 }
 
 /**

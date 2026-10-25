@@ -14,7 +14,7 @@
 
 | 项目 | 结果 |
 |------|------|
-| 单元测试（纯 JVM，无需设备） | ✅ **288 / 288 通过**（23 个测试类）＋手机模块 7 / 7 |
+| 单元测试（纯 JVM，无需设备） | ✅ **289 / 289 通过**（23 个测试类）＋手机模块 7 / 7 |
 | Debug APK | ✅ 构建成功，**28.17 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
 | Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.52 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
 | 手机配套 APK（`:phone`，应用内更新/通知中继） | ✅ debug **26.01 MB** / release **2.73 MB** → `dist/wearmail-phone-*.apk` |

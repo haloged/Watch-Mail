@@ -118,4 +118,24 @@ class UpdateJsonTest {
         """.trimIndent()
         assertNull(UpdateJson.parseLatestRelease(insecure)?.apkUrl)
     }
+
+    @Test
+    fun `同时上传手表包与手机包时排除手机版`() {
+        // 手机包排在前面（模拟先上传手机包）：旧逻辑会误选它，手表端安装必失败
+        val json = """
+            {
+              "tag_name": "v1.2.4",
+              "html_url": "https://github.com/haloged/Watch-Mail/releases/tag/v1.2.4",
+              "assets": [
+                {"name": "wearmail-phone-release.apk", "browser_download_url": "https://github.com/haloged/Watch-Mail/releases/download/v1.2.4/wearmail-phone-release.apk"},
+                {"name": "wearmail-release.apk", "browser_download_url": "https://github.com/haloged/Watch-Mail/releases/download/v1.2.4/wearmail-release.apk"}
+              ]
+            }
+        """.trimIndent()
+        val info = UpdateJson.parseLatestRelease(json)
+        assertEquals(
+            "https://github.com/haloged/Watch-Mail/releases/download/v1.2.4/wearmail-release.apk",
+            info?.apkUrl,
+        )
+    }
 }

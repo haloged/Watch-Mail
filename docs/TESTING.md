@@ -68,11 +68,11 @@ python tools/test_summary.py
 | `HtmlCacheStateTest` | 8 | 三态映射（SQL NULL / 空串 / 非空文本）、抓取结果写列、往返一致、`resolved` 必须精确等于「不是 UNKNOWN」 | 正文缓存完整性（P1 防回归） |
 | `ProviderPresetsTest` | 6 | Outlook 仅 OAuth2、**OAuth2 为 Outlook 专属（其余预设只含密码类）**、未知预设回退密码类、认证方式列表非空契约、微软个人邮箱域判定（含子域与不误判） | 添加账户（OAuth2 锁定与专属收窄 / 扫码拦截） |
 | `AppVersionTest` | 6 | 语义化版本解析（`v` 前缀/预发布后缀/非法输入）、逐段数值比较（`1.10.0 > 1.9.0`）、解析失败不误报 | 检查更新（版本比较） |
-| `UpdateJsonTest` | 9 | GitHub Releases 响应解析：完整字段、`body=null`、字段缺失/空白、非法 JSON 均安全返回 null；**assets 资产挑选（优先 release 命名、回退首个 APK、拒绝非 https）** | 检查更新（响应解析 / 应用内下载地址） |
+| `UpdateJsonTest` | 10 | GitHub Releases 响应解析：完整字段、`body=null`、字段缺失/空白、非法 JSON 均安全返回 null；**assets 资产挑选（优先 release 命名、回退首个 APK、拒绝非 https、两个 release 包时排除手机版）** | 检查更新（响应解析 / 应用内下载地址） |
 | `ApkDownloaderTest` | 9 | 加速候选（gh-proxy 前缀只加给 GitHub 链接）、速度过慢判定（窗口未满不判 / 低于 24KB/s 判过慢 / 持平不判）、进度百分比（含未知总大小的 -1 与越界防御）、Release 说明清洗（Markdown 标记、空串、限长截断） | 应用内更新（下载策略与更新日志） |
 | `AuthChoiceTest` | 5 | 两个密码枚举合并为一个「密码/授权码」选项、顺序稳定、选中判定（PASSWORD 与 APP_PASSWORD 都能落到合并项）、任何允许的认证方式都有匹配选项 | 登录方式合并（防选中态丢失） |
 | `PairingExportTest` | 3 | 手表 → 手机配置导出：字段与版本、OAuth2 令牌组（带令牌不带密码）、空列表边界 | 扫码同步到手机 |
-| **合计** | **288**（另有 phone 模块 `PhoneSyncTest` 7 例） | | |
+| **合计** | **289**（另有 phone 模块 `PhoneSyncTest` 7 例） | | |
 
 ## 4. 静态检查
 
@@ -101,7 +101,7 @@ python tools/test_summary.py
 | 扫码配置 Wi-Fi 前置检查 | `AddAccountViewModel.startPairing` 未做 Wi-Fi 前置检查（用户先看到无二维码的空对话框）；或判定退化为"有没有局域网 IP"（蜂窝网络会误判为可配对） |
 | **交互反馈使用浮层提示** | 添加账户页 / 设置页的提示重新渲染进列表内容：入口与提示处在不同滚动位置时会互相看不见（真机反馈 ×2 的「点击后没有任何提示」）；断言 `ToastHost` 组件存在且两个页面在使用 |
 | **邮件链接开关与外部打开** | 详情页不再消费 `openLinksInBrowser`（开关形同虚设）、WebView 脱离沙箱自行导航（缺 `shouldOverrideUrlLoading` 拦截）、或不再经 `ACTION_VIEW` 交给外部浏览器 |
-| **应用内更新下载链路** | UpdateJson 不再解析 APK 资产（拿不到安装包）、下载器丢失 gh-proxy 加速前缀或速度过慢判定（慢速直连永不回退）、弹窗未接下载器/安装器、Manifest 缺 `REQUEST_INSTALL_PACKAGES` 或 FileProvider（下载后装不上） |
+| **应用内更新下载链路** | UpdateJson 不再解析 APK 资产（拿不到安装包）、**不再排除手机版 APK（手表包与手机包同时上传时会下错包）**、下载器丢失 gh-proxy 加速前缀或速度过慢判定（慢速直连永不回退）、弹窗未接下载器/安装器、Manifest 缺 `REQUEST_INSTALL_PACKAGES` 或 FileProvider（下载后装不上） |
 | **手机配套应用同步链路** | 手表端缺 `PairingExport` / `/export` 路由（手机拉不到配置）；手机模块未在 `:phone` 中声明、Manifest 缺前台服务或通知权限（收信静默失败）；手机端未加密存储凭据（明文落盘）、未做增量收信或未发通知；**手机主界面出现邮件查看调用**（越界提供查看邮件） |
 | **IMAP 客户端身份（RFC 2971）** | `ImapClientImpl` 未在连接后发送 IMAP ID，或只在普通连接发送、IDLE 重连时漏发（**网易 163/126 会拒绝收信：Unsafe Login**）；手机模块复制的实现同样必须包含 |
 | Kotlin 括号配平 | 明显的语法破损 |
