@@ -44,3 +44,7 @@ dist/
 *.iml
 .DS_Store
 Thumbs.db
+
+# Python 缓存（tools/*.py 运行后产生）
+__pycache__/
+*.pyc

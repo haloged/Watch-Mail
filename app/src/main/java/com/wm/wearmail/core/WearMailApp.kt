@@ -23,6 +23,9 @@ class WearMailApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // 日志落盘：反馈中心「上传日志」依赖它，必须在其他初始化之前（只影响写文件，无网络）
+        runCatching { LogFileWriter.init(this) }
+
         val container = this.container
 
         // 通知渠道：必须在任何通知发出前创建（Android 8.0+ 要求）

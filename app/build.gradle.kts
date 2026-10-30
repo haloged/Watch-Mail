@@ -19,14 +19,18 @@ android {
         // Wear OS 3.0（API 30）起步：可覆盖绝大多数在售智能手表
         minSdk = 30
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.2.3"
+        versionCode = 6
+        versionName = "1.2.4"
 
         // Microsoft (Outlook) OAuth2 客户端 ID。
         // 优先级：手表「设置 → Outlook OAuth2」里填写的值 > 这里注入的默认值。
         // 允许在 gradle.properties 里设置 wearmail.microsoftOAuthClientId 而不改代码。
         val msClientId = (project.findProperty("wearmail.microsoftOAuthClientId") as? String).orEmpty()
         buildConfigField("String", "MICROSOFT_OAUTH_CLIENT_ID", "\"$msClientId\"")
+        // 反馈表（维格表）上传令牌：**不写进源码**，由 gradle.properties / -P 注入。
+        // 公开仓库的 gradle.properties 留空（别人构建的包不带令牌，属预期）。
+        val vikaToken = (project.findProperty("wearmail.vikaToken") as? String).orEmpty()
+        buildConfigField("String", "VIKA_API_TOKEN", "\"$vikaToken\"")
         // 无 Robolectric/Instrumentation 依赖，单元测试只覆盖纯逻辑
     }
 

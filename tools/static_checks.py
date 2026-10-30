@@ -1169,6 +1169,123 @@ def check_imap_identity(report: Report, root: Path) -> None:
     report.check("IMAP 客户端身份（RFC 2971）", not problems, "; ".join(problems[:6]))
 
 
+def check_feedback_center(report: Report, root: Path) -> None:
+    """
+    反馈中心（设置页入口 → GitHub / 表单二维码 / 上传日志）。
+
+    防回归锚点：
+    - 设置页保留「反馈中心」入口；
+    - 反馈页两条外部链接（GitHub Issues / 飞书表单）与「在手表打开」（ACTION_VIEW）；
+    - 日志落盘接通（Logs 调 LogFileWriter），上传按 Vika 两段式 API：
+      附件上传 + 创建记录（写入必须用字段名：Vika 的 fieldKey=id 只影响读取，用 ID 会 400）；
+    - 上传成功后把**日志号**展示给用户（用户据此查日志）。
+    """
+    problems: list[str] = []
+    java_root = root / "app/src/main/java/com/wm/wearmail"
+
+    settings = java_root / "ui/screen/settings/SettingsScreen.kt"
+    if not settings.exists():
+        problems.append("缺少 SettingsScreen.kt")
+    else:
+        text = strip_comments(settings.read_text(encoding="utf-8", errors="ignore"))
+        if "反馈中心" not in text:
+            problems.append("设置页缺少「反馈中心」入口")
+
+    links = java_root / "feedback/FeedbackLinks.kt"
+    if not links.exists():
+        problems.append("缺少 FeedbackLinks.kt（反馈链接常量）")
+    else:
+        text = links.read_text(encoding="utf-8", errors="ignore")
+        if "github.com/haloged/Watch-Mail/issues/new" not in text:
+            problems.append("缺少 GitHub Issues 反馈链接")
+        if "vika.cn/share/shrqKZoCV3CGi7fMfHP6P" not in text:
+            problems.append("反馈问卷链接缺失或不是最新的维格表分享页")
+
+    screen = java_root / "ui/screen/feedback/FeedbackCenterScreen.kt"
+    if not screen.exists():
+        problems.append("缺少 FeedbackCenterScreen.kt（反馈中心页面）")
+    else:
+        text = strip_comments(screen.read_text(encoding="utf-8", errors="ignore"))
+        if "ACTION_VIEW" not in text:
+            problems.append("二维码弹窗缺少「在手表打开」（ACTION_VIEW）")
+        if "uploadedLogId" not in text:
+            problems.append("上传日志后未展示日志号（用户无法据此反馈）")
+
+    uploader = java_root / "feedback/VikaUploader.kt"
+    if not uploader.exists():
+        problems.append("缺少 VikaUploader.kt（日志上传）")
+    else:
+        text = strip_comments(uploader.read_text(encoding="utf-8", errors="ignore"))
+        if "/attachments" not in text:
+            problems.append("上传日志缺少附件上传（Vika /attachments）")
+        # 写入必须用字段名（用字段 ID 会被 Vika 拒绝：400 参数格式不正确，真机实测）
+        if '"日志号"' not in text or '"日志文件"' not in text:
+            problems.append("创建记录未使用字段名写入（Vika 只接受字段名，用字段 ID 会返回 400）")
+        if "records?fieldKey=id" in text:
+            problems.append("创建记录 URL 仍带 fieldKey=id（写入无效，容易误导）")
+        # 反馈令牌必须是构建注入（源码/公开仓库不能出现真值）
+        if "BuildConfig.VIKA_API_TOKEN" not in text:
+            problems.append("上传令牌未从 BuildConfig 注入（源码硬编码会随公开仓库泄露）")
+        if re.search(r'"usk[A-Za-z0-9]{10,}"', text):
+            problems.append("源码中出现疑似维格表令牌（API Token 必须由构建注入）")
+
+    # 上传风控：1 分钟 1 次、每天 5 次（纯函数策略 + 页面接入）
+    quota = java_root / "feedback/FeedbackQuota.kt"
+    if not quota.exists():
+        problems.append("缺少 FeedbackQuota.kt（上传风控）")
+    else:
+        text = strip_comments(quota.read_text(encoding="utf-8", errors="ignore"))
+        if "MIN_INTERVAL_MILLIS" not in text or "MAX_UPLOADS_PER_DAY" not in text:
+            problems.append("上传风控缺少间隔/每日上限常量")
+    if screen.exists():
+        text = strip_comments(screen.read_text(encoding="utf-8", errors="ignore"))
+        if "FeedbackQuota.evaluate" not in text:
+            problems.append("上传日志未接入风控（一分钟一次 / 每天五次）")
+
+
+    logs = java_root / "core/Logs.kt"
+    writer = java_root / "core/LogFileWriter.kt"
+    if not writer.exists():
+        problems.append("缺少 LogFileWriter.kt（日志落盘）")
+    elif logs.exists():
+        text = strip_comments(logs.read_text(encoding="utf-8", errors="ignore"))
+        if "LogFileWriter.write" not in text:
+            problems.append("日志未落盘（上传日志会没有内容）")
+
+    report.check("反馈中心（含日志上传）", not problems, "; ".join(problems[:6]))
+
+
+def check_oauth_code_layout(report: Report, root: Path) -> None:
+    """
+    OAuth2 设备码短码的完整显示（438×438 圆屏适配）。
+
+    背景（真机反馈）：短码此前用固定 `titleLarge`，在 438 圆屏上被裁切——
+    微软的 9 位短码只显示 8 位，用户无法完成授权。防回归锚点：
+    - `AddAccountScreen` 用 `OAuthCodeLayout.fontSizeSp` 按可用宽度计算字号；
+    - 短码保持单行（`softWrap = false`），不允许折行拆断；
+    - 纯函数与测试文件存在（计算逻辑必须可回归）。
+    """
+    problems: list[str] = []
+    screen = root / "app/src/main/java/com/wm/wearmail/ui/screen/accounts/AddAccountScreen.kt"
+    layout = root / "app/src/main/java/com/wm/wearmail/ui/screen/accounts/OAuthCodeLayout.kt"
+    test = root / "app/src/test/java/com/wm/wearmail/ui/screen/accounts/OAuthCodeLayoutTest.kt"
+
+    if not layout.exists():
+        problems.append("缺少 OAuthCodeLayout.kt（短码字号计算）")
+    if not test.exists():
+        problems.append("缺少 OAuthCodeLayoutTest.kt（短码字号计算无测试覆盖）")
+    if not screen.exists():
+        problems.append("缺少 AddAccountScreen.kt")
+    else:
+        text = strip_comments(screen.read_text(encoding="utf-8", errors="ignore"))
+        if "OAuthCodeLayout.fontSizeSp(" not in text:
+            problems.append("短码未使用自适应字号（438 圆屏会裁掉部分字符）")
+        if "softWrap = false" not in text:
+            problems.append("短码允许换行（单行短码被拆断，用户容易输错）")
+
+    report.check("OAuth2 短码完整显示", not problems, "; ".join(problems[:6]))
+
+
 def check_phone_companion_sync(report: Report, root: Path) -> None:
     """
     手机配套应用的同步链路（手表导出配置 → 手机扫码拉取 → 手机收信发通知）。
@@ -1350,6 +1467,8 @@ def main() -> int:
     check_inapp_update_download(report, root)
     check_phone_companion_sync(report, root)
     check_imap_identity(report, root)
+    check_oauth_code_layout(report, root)
+    check_feedback_center(report, root)
     check_kotlin_balance(report, root)
     check_package_declared(report, root)
 

@@ -305,6 +305,8 @@ OAuth2（Outlook）授权面板 —— 步骤 1 的登录方式为 OAuth2 时，
 - 已授权后显示「已授权（有效期至 HH:mm）」+「重新授权」按钮；
 - 微软不支持在授权链接里预填短码（无 `verification_uri_complete`），
   因此二维码只承载授权网址，短码仍需在手机上手动输入；
+- **短码字号按可用宽度自适应**（`OAuthCodeLayout.fontSizeSp`，14–26sp，字距 1sp，单行不换行）：
+  固定在 `titleLarge` 时，438×438 圆屏会把微软的 9 位短码裁成 8 位（真机反馈）；
 - 面板**不接触任何令牌**：令牌只存在于 ViewModel 私有字段，界面只显示"是否已授权 + 有效期"。
 
 ### 5.3 统一收件箱（InboxScreen）— 主页面
@@ -415,6 +417,7 @@ OAuth2（Outlook）授权面板 —— 步骤 1 的登录方式为 OAuth2 时，
 | 手机云通知 | 分组说明：由手机收信并发手机通知（手表自动同步手机通知） | 见下三行 |
 | 手机云通知 | 「连接手机云通知」按钮（下方附说明文字：同一 Wi-Fi、手机版扫码、通知自动同步到手表） | `SecondaryActionButton`（`WearIcons.Phone`） |
 | 手机云通知 | 「下载手机版」按钮 → 弹出二维码（内容为 GitHub Releases 下载页） | `SecondaryActionButton`（`WearIcons.Download`） |
+| 反馈 | 「反馈中心」按钮（下方说明：上传日志后把日志号填进反馈，定位更快） | `SettingsActionRow`（`WearIcons.Info`）→ 覆盖层页面 `FeedbackCenterScreen` |
 | 存储 | 邮件元数据 / 正文缓存数量 | 文本 + 「清理缓存」按钮（二次确认） |
 | 关于 | 应用名、版本、**「检查更新」按钮** | 文本 + `SecondaryActionButton` |
 

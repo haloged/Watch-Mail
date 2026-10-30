@@ -8,7 +8,9 @@ import android.util.Log
  * 设计取舍：
  * - 手表端 logcat 抓取不便，因此所有日志都带模块前缀 `WearMail/xxx`，便于过滤；
  * - 严禁在日志中输出密码、OAuth 令牌、邮件正文等敏感信息，只允许输出
- *   服务器地址、UID、状态码等排障必需的非敏感信息。
+ *   服务器地址、UID、状态码等排障必需的非敏感信息；
+ * - 同时落盘到 `filesDir/logs/`（按天一个文件，供「反馈中心 → 上传日志」），
+ *   见 [LogFileWriter]；写文件走异步队列，不影响业务线程。
  */
 object Logs {
 
@@ -20,26 +22,32 @@ object Logs {
     fun d(tag: String, message: String) {
         if (debugEnabled) {
             Log.d("$PREFIX/$tag", message)
+            LogFileWriter.write("D", tag, message)
         }
     }
 
     fun i(tag: String, message: String) {
         Log.i("$PREFIX/$tag", message)
+        LogFileWriter.write("I", tag, message)
     }
 
     fun w(tag: String, message: String, throwable: Throwable? = null) {
         if (throwable == null) {
             Log.w("$PREFIX/$tag", message)
+            LogFileWriter.write("W", tag, message)
         } else {
             Log.w("$PREFIX/$tag", message, throwable)
+            LogFileWriter.write("W", tag, message + " | " + throwable.javaClass.simpleName + ": " + throwable.message.orEmpty())
         }
     }
 
     fun e(tag: String, message: String, throwable: Throwable? = null) {
         if (throwable == null) {
             Log.e("$PREFIX/$tag", message)
+            LogFileWriter.write("E", tag, message)
         } else {
             Log.e("$PREFIX/$tag", message, throwable)
+            LogFileWriter.write("E", tag, message + " | " + throwable.javaClass.simpleName + ": " + throwable.message.orEmpty())
         }
     }
 }

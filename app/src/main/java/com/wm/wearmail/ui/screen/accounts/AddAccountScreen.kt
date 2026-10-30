@@ -3,6 +3,7 @@ package com.wm.wearmail.ui.screen.accounts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -79,6 +80,12 @@ private val TOUCH_TARGET_MIN_HEIGHT = 48.dp
  * 手机在 20~30cm 距离可稳定识别，同时不会挤占圆屏两侧安全区。
  */
 private val QR_DISPLAY_SIZE = 132.dp
+
+/**
+ * OAuth2 短码的字符间距（sp）：配合自适应字号，既保证逐字清晰，又不额外吃掉可用宽度
+ * （438×438 圆屏上 2sp 会让 9 位短码被裁切）。
+ */
+private const val CODE_LETTER_SPACING_SP = 1f
 
 /**
  * 添加账户页（覆盖层，三步式表单）。
@@ -831,13 +838,30 @@ private fun OAuthAuthorizePanel(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = state.userCode.orEmpty(),
-                    style = MaterialTheme.typography.titleLarge,
-                    letterSpacing = 2.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                )
+                // 短码字号按可用宽度自适应：438×438 圆屏上固定 titleLarge 会裁切，
+                // 微软短码为 9 位时用户只能看到 8 位（真机反馈），导致无法完成授权
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val code = state.userCode.orEmpty()
+                    val codeFontSize = OAuthCodeLayout.fontSizeSp(
+                        availableWidthDp = maxWidth.value,
+                        codeLength = code.length,
+                        letterSpacingSp = CODE_LETTER_SPACING_SP,
+                    )
+                    Text(
+                        text = code,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = codeFontSize.sp,
+                            letterSpacing = CODE_LETTER_SPACING_SP.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        softWrap = false,
+                        textAlign = TextAlign.Center,
+                    )
+                }
 
                 state.qrBitmap?.let { qr ->
                     Spacer(modifier = Modifier.height(6.dp))

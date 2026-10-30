@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.FlowRowScope
@@ -685,6 +686,50 @@ fun SecondaryActionButton(
     )
 }
 
+/**
+ * 设置风格的「动作行」：整行卡片 + 左图标 + 标题/副标题。
+ *
+ * 与设置页的 [androidx.wear.compose.material3.SwitchButton] 同一视觉（只是右侧没有开关），
+ * 用于「点击执行动作」的入口，保证与开关类设置项的按钮风格一致
+ * （反馈中心的三个按钮统一使用本组件）。
+ */
+@Composable
+fun SettingsActionRow(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+    label: @Composable () -> Unit,
+    secondaryLabel: (@Composable () -> Unit)? = null,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        icon = icon?.let { vector ->
+            {
+                Icon(
+                    imageVector = vector,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        },
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Column {
+            label()
+            secondaryLabel?.invoke()
+        }
+    }
+}
+
+/**
+ * 说明性文字行（居中、次要色，正文类文字用 labelSmall / bodySmall）
+ */
 /**
  * 手表端单行/多行文本输入框。
  *

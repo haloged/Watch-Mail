@@ -14,11 +14,11 @@
 
 | 项目 | 结果 |
 |------|------|
-| 单元测试（纯 JVM，无需设备） | ✅ **289 / 289 通过**（23 个测试类）＋手机模块 7 / 7 |
-| Debug APK | ✅ 构建成功，**28.17 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
-| Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.52 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
+| 单元测试（纯 JVM，无需设备） | ✅ **309 / 309 通过**（27 个测试类）＋手机模块 7 / 7 |
+| Debug APK | ✅ 构建成功，**27.97 MB** → [`dist/wearmail-debug.apk`](../dist/wearmail-debug.apk) |
+| Release APK（R8 压缩+混淆+优化 + 资源压缩） | ✅ 构建成功，**3.54 MB** → [`dist/wearmail-release.apk`](../dist/wearmail-release.apk) |
 | 手机配套 APK（`:phone`，应用内更新/通知中继） | ✅ debug **26.01 MB** / release **2.73 MB** → `dist/wearmail-phone-*.apk` |
-| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层/密文列语义/缓存三态/坐标换算/R8 优化/更新链路/OAuth2 页面/扫码拦截/Wi-Fi 前置/浮层提示/链接开关/应用内更新/手机同步链路/IMAP 身份等 26 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
+| 静态检查（资源引用/契约/安全红线/Keystore/信息流预算/覆盖层/密文列语义/缓存三态/坐标换算/R8 优化/更新链路/OAuth2 页面/扫码拦截/Wi-Fi 前置/浮层提示/链接开关/应用内更新/手机同步链路/IMAP 身份/OAuth2 短码/反馈中心等 28 项） | ✅ 全部通过 → [`dist/reports/static-checks.txt`](../dist/reports/static-checks.txt) |
 | 测试报告 | [`dist/reports/test-summary.txt`](../dist/reports/test-summary.txt)、[`dist/reports/unit-tests/index.html`](../dist/reports/unit-tests/index.html) |
 | 真机端到端（IMAP/SMTP 实收实发、通知、表冠手感） | ⚠️ **未验证**，需真实手表，清单见 [docs/TESTING.md](TESTING.md) §7 |
 
@@ -56,6 +56,7 @@
 | 本地缓存上限 | 元数据 500 封 + 正文 50 封，超出按 LRU 淘汰 |
 | **检查更新** | 启动时自动请求 GitHub Releases 最新版本（`haloged/Watch-Mail`）并与当前版本做语义化比较，有新版本弹出**带更新日志**的提示；弹窗内**应用内直接下载** APK（直连慢/失败自动切换 gh-proxy 加速），完成后拉起系统安装器；设置页「关于」提供手动检查入口；请求在首帧后异步执行（不阻塞冷启动），失败静默、不影响其他功能 |
 | **手机配套应用「腕邮手机」**（`:phone`） | OPPO 等手表系统限制手表端通知时，可安装手机配套应用：手表「设置 → 手机云通知 → 连接手机云通知」显示二维码（同组「下载手机版」二维码指向 GitHub Releases），手机扫码拉取全部账户配置（含凭据与 OAuth2 令牌，一次性 token + 同一 Wi-Fi），由手机前台服务按**可调间隔**（1/5/15 分钟）轮询收信并发出**手机通知**（手表自动同步手机通知）。**OAuth2 账户由手机端用 refresh token + 手表配置的客户端 ID 自行续期**；首次启动弹出使用说明（OPPO 健康通知权限 + 后台保活）；提供**测试通知**入口。手机端**不提供查看邮件的界面** |
+| **反馈中心** | 设置 → 「反馈」→ 反馈中心：①「前往 GitHub 反馈」显示 Issues 新建页二维码（提示可能遇到网络问题，但解决更快）；②「填写表单反馈」显示飞书表单二维码（提示解决更慢，约两个版本内集中解决）；两个二维码下方均提供「在手表打开」；③「上传日志」把**当天日志**（`filesDir/logs/`，按天一个文件）上传到维格表反馈表（Vika 两段式 API：附件上传 + 创建记录，`fieldKey=id` 仅用于读取——**写入用字段名**），上传前自动生成日志号 `MMdd-HHmm-XXX`（**13 字符**短格式，手表上单行完整显示），**上传成功后日志号显示在手表上**，用户据此在反馈中提供日志；三个入口按钮统一为设置行风格（`SettingsActionRow`，与开关类设置项同一视觉）。**上传风控**：1 分钟内只能上传一次、每天最多 5 次（按尝试计数，界面显示今天剩余次数，用完按钮置灰）；「填写表单反馈」的二维码指向**维格表分享页** |
 | 圆形表盘适配 | 安全半径 210px、按 Y 坐标动态计算弦长收窄列表项、顶/底弧形区分区 |
 | 交互 | 上下滑滚动、左右滑切换页面、点击、长按菜单、表冠旋转、全操作振动反馈 |
 
@@ -264,7 +265,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `.gradlehome/`、`.gradle-dist/`、`.gradle/`、`.kotlin/` | Gradle/Kotlin 缓存与本地解压的发行版（数百 MB） |
 | `.tmp/`、`.refsrc/`、`.androidhome/` | 构建过程临时目录 / 依赖源码解压目录 / Android 用户目录 |
 | `build/`、`app/build/` | 构建产物（每次构建都变） |
-| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（28.17 MB / 3.52 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
+| `dist/`（含 `*.apk` 与测试报告） | APK 二进制（27.97 MB / 3.54 MB）与生成的报告。建议用 **GitHub Releases** 分发 APK，用 CI artifacts 保存报告；确实要提交某一份时用 `git add -f dist/reports/test-summary.txt` 强制添加 |
 | `*.iml`、`.idea/`、`.DS_Store`、`Thumbs.db` | IDE 与系统文件 |
 
 **可以（也应该）上传**：`app/src/**`、`gradle/wrapper/**`（含 `gradle-wrapper.jar`）、

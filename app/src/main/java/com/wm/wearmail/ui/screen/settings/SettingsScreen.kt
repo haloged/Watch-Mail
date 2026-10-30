@@ -60,6 +60,7 @@ fun SettingsScreen(
     active: Boolean,
     rotaryBus: RotaryBus,
     onOpenOAuth2Config: () -> Unit,
+    onOpenFeedback: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(container))
     val state by vm.uiState.collectAsStateWithLifecycle()
@@ -422,6 +423,36 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         icon = WearIcons.Delete,
                         enabled = !state.cacheBusy,
+                    )
+                }
+            }
+
+            // ---------------- 反馈 ----------------
+            // 三种反馈方式：GitHub（快但可能网络不通）/ 表单（慢但稳定）/ 上传日志（附日志号）
+            settingsSlot(index++, listState) { modifier ->
+                SectionHeader(text = "反馈", modifier = modifier)
+            }
+
+            settingsSlot(index++, listState) { modifier ->
+                Column(modifier = modifier.fillMaxWidth()) {
+                    SecondaryActionButton(
+                        text = "反馈中心",
+                        onClick = {
+                            haptics.tick()
+                            onOpenFeedback()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = WearIcons.Info,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "遇到问题可反馈；上传日志后把日志号填进反馈，定位更快",
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }

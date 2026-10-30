@@ -24,6 +24,7 @@ import com.wm.wearmail.ui.screen.compose.ComposeMailScreen
 import com.wm.wearmail.ui.screen.detail.EmailDetailScreen
 import com.wm.wearmail.ui.screen.inbox.InboxScreen
 import com.wm.wearmail.ui.kit.UpdateAvailableDialog
+import com.wm.wearmail.ui.screen.feedback.FeedbackCenterScreen
 import com.wm.wearmail.ui.screen.settings.OAuth2ConfigScreen
 import com.wm.wearmail.ui.screen.settings.SettingsScreen
 import androidx.wear.compose.material3.MaterialTheme
@@ -62,6 +63,9 @@ sealed interface OverlayRoute {
 
     /** Outlook OAuth2 客户端 ID 配置（从设置页进入） */
     data object OAuth2Config : OverlayRoute
+
+    /** 反馈中心（GitHub / 表单二维码 / 上传日志） */
+    data object Feedback : OverlayRoute
 }
 
 /**
@@ -150,6 +154,7 @@ fun WearMailApp(
                     active = isActive,
                     rotaryBus = rotaryBus,
                     onOpenOAuth2Config = { overlay = OverlayRoute.OAuth2Config },
+                    onOpenFeedback = { overlay = OverlayRoute.Feedback },
                 )
             }
         }
@@ -205,6 +210,11 @@ fun WearMailApp(
             )
 
             OverlayRoute.OAuth2Config -> OAuth2ConfigScreen(
+                container = container,
+                onBack = { overlay = null },
+            )
+
+            OverlayRoute.Feedback -> FeedbackCenterScreen(
                 container = container,
                 onBack = { overlay = null },
             )
