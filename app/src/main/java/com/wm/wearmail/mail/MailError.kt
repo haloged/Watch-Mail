@@ -40,7 +40,9 @@ sealed class MailError(
     val userMessage: String
         get() = when (this) {
             is Network -> "网络不可用，已展示本地缓存"
-            is Auth -> "账号或密码/授权码错误，请重新配置"
+            // 优先展示具体原因（如 Outlook 的「请启用 IMAP」、网易的 Unsafe Login 等），
+            // 只有拿不到原因时才退回通用文案 —— 固定文案会把可操作提示吞掉（真机反馈）
+            is Auth -> message?.takeIf { it.isNotBlank() } ?: "账号或密码/授权码错误，请重新配置"
             is Timeout -> "连接超时（超过 10 秒），请检查网络"
             is Protocol -> "服务器响应异常，请稍后重试"
             is Config -> "服务器地址或端口配置有误"
@@ -74,7 +76,18 @@ fun Throwable.toMailError(defaultMessage: String = "邮件操作失败"): MailEr
     val lower = text.lowercase()
 
     return when {
-        this is AuthenticationFailedExceptionWrapper -> MailError.Auth(text, this)
+        // Outlook 的「User is authenticated but not connected.」= 认证通过但 IMAP 服务不可用
+        // （账号未启用 IMAP / 租户被管理员禁用 / 令牌权限不足），提示必须可操作
+        this is AuthenticationFailedExceptionWrapper ->
+            if (lower.contains("authenticated but not connected")) {
+                MailError.Auth(
+                    "Outlook 拒绝 IMAP 登录：请确认账号已启用 IMAP" +
+                        "（网页版 → 设置 → 邮件 → 同步邮件），或联系管理员；也可稍后重新授权",
+                    this,
+                )
+            } else {
+                MailError.Auth(text, this)
+            }
 
         lower.contains("authenticationfailed") ||
             lower.contains("auth") && lower.contains("fail") ||

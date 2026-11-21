@@ -16,19 +16,28 @@ class ApkDownloaderTest {
     // ---------------- DownloadUrls：加速候选 ----------------
 
     @Test
-    fun `github 链接生成直连与代理两个候选`() {
-        val url = "https://github.com/haloged/Watch-Mail/releases/download/v1.2.2/app-release.apk"
+    fun `官方镜像排第一，github 直连与代理随后`() {
+        val url = "https://github.com/haloged/Watch-Mail/releases/download/v1.2.5/wearmail-release.apk"
         assertEquals(
-            listOf(url, "https://gh-proxy.com/$url"),
+            listOf(DownloadUrls.PRIMARY_MIRROR, url, DownloadUrls.PROXY_PREFIX + url),
             DownloadUrls.candidates(url),
         )
     }
 
     @Test
-    fun `非 github 链接不生成代理候选`() {
+    fun `非 github 链接：镜像 + 原始地址（无代理）`() {
         val url = "https://example.com/app.apk"
-        assertEquals(listOf(url), DownloadUrls.candidates(url))
+        assertEquals(listOf(DownloadUrls.PRIMARY_MIRROR, url), DownloadUrls.candidates(url))
         assertFalse(DownloadUrls.isAccelerable(url))
+    }
+
+    @Test
+    fun `官方镜像就是需求指定的地址且优先`() {
+        assertEquals(
+            "https://wearmail.cn-nb2.rains3.com/wearmail-release.apk",
+            DownloadUrls.PRIMARY_MIRROR,
+        )
+        assertEquals(DownloadUrls.PRIMARY_MIRROR, DownloadUrls.candidates("https://x.test/a.apk").first())
     }
 
     // ---------------- DownloadPolicy：速度判定 ----------------

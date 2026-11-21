@@ -86,6 +86,8 @@ import com.wm.wearmail.util.TimeFormat
 fun EmailDetailScreen(
     container: AppContainer,
     emailId: Long,
+    /** 是否从垃圾邮件箱打开：默认不加载图片、不打开链接（可设置里放开） */
+    isJunk: Boolean = false,
     onBack: () -> Unit,
     onReply: (to: String, subject: String) -> Unit,
     /** 表冠旋转事件：详情页正文同样支持表冠滚动（为 null 时仅支持手指滚动） */
@@ -167,8 +169,12 @@ fun EmailDetailScreen(
                 if (canRenderHtml && htmlMode) {
                     HtmlBodyView(
                         html = uiState.html.orEmpty(),
-                        allowRemoteImages = uiState.remoteImagesEnabled,
-                        openLinksInBrowser = uiState.openLinksInBrowser,
+                        // 垃圾邮件默认屏蔽图片与链接：即使全局开关打开，也要
+                        // 「垃圾邮件加载图片与链接」单独开启后才放行（防钓鱼/追踪）
+                        allowRemoteImages = uiState.remoteImagesEnabled &&
+                            (!isJunk || uiState.junkMailMediaEnabled),
+                        openLinksInBrowser = uiState.openLinksInBrowser &&
+                            (!isJunk || uiState.junkMailMediaEnabled),
                         // 打开失败（没有浏览器/被系统拦截）：浮层提示，而不是静默无反应
                         onOpenLinkFailed = { toast = "未找到可用浏览器，无法打开链接" },
                         modifier = Modifier.fillMaxSize(),

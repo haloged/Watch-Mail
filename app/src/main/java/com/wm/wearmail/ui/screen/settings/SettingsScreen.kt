@@ -1,5 +1,6 @@
 package com.wm.wearmail.ui.screen.settings
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,9 +16,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,6 +32,8 @@ import androidx.wear.compose.material3.SwitchButton
 import androidx.wear.compose.material3.Text
 import com.wm.wearmail.BuildConfig
 import com.wm.wearmail.core.AppContainer
+import com.wm.wearmail.core.ConfigExporter
+import com.wm.wearmail.core.ConfigImporter
 import com.wm.wearmail.ui.kit.CompactOptionGroupOf
 import com.wm.wearmail.core.RotaryBus
 import com.wm.wearmail.data.prefs.SyncFrequency
@@ -40,9 +45,11 @@ import com.wm.wearmail.ui.kit.LoadingIndicator
 import com.wm.wearmail.ui.kit.PrimaryActionButton
 import com.wm.wearmail.ui.kit.SectionHeader
 import com.wm.wearmail.ui.kit.SecondaryActionButton
+import com.wm.wearmail.ui.kit.SettingsActionRow
 import com.wm.wearmail.ui.kit.ToastHost
 import com.wm.wearmail.ui.kit.WearIcons
 import com.wm.wearmail.ui.kit.rememberHaptics
+import kotlinx.coroutines.launch
 
 /**
  * 设置页（一级页面，位于横向分页的第一页 —— 主界面右滑进入）。
@@ -66,6 +73,8 @@ fun SettingsScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     val haptics = rememberHaptics()
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // 一次性提示（由页面末尾的 ToastHost 以浮层展示：
     // 设置页很长，提示若跟随滚动位置会出现「看不到回应」的情况）
@@ -118,6 +127,8 @@ fun SettingsScreen(
                 SectionHeader(text = "同步", modifier = modifier)
             }
 
+            // 4 个频率档位放在同一个列表项里自适应换行。
+            // 原来是「一档一条整行 52dp 大按钮」，4 条就占掉半屏且视觉笨重。
             // 4 个频率档位放在同一个列表项里自适应换行。
             // 原来是「一档一条整行 52dp 大按钮」，4 条就占掉半屏且视觉笨重。
             settingsSlot(index++, listState, key = "freq-group") { modifier ->
@@ -359,6 +370,18 @@ fun SettingsScreen(
                 }
             }
 
+            // 垃圾邮件默认屏蔽图片与链接（防钓鱼/追踪），独立于 HTML 渲染开关；
+            // 打开后仍受「显示远程图片 / 打开邮件内链接」两个全局开关约束
+            settingsSlot(index++, listState) { modifier ->
+                SwitchButton(
+                    checked = state.settings.junkMailMediaEnabled,
+                    onCheckedChange = { vm.setJunkMailMedia(it) },
+                    modifier = modifier.fillMaxWidth(),
+                    secondaryLabel = { Text(text = "默认关闭（防钓鱼）", maxLines = 1) },
+                    label = { Text(text = "垃圾邮件加载图片与链接", maxLines = 2) },
+                )
+            }
+
             // ---------------- 手机云通知 ----------------
             // OPPO 等手表系统限制手表端通知，但会自动同步手机通知：
             // 手机版扫码同步账户 → 手机收信 → 发手机通知 → 通知同步到手表
@@ -420,6 +443,8 @@ fun SettingsScreen(
                             haptics.tick()
                             confirmClear = true
                         },
+                        // 与历史版本一致：裸 Modifier.fillMaxWidth()（不要用列表项的 modifier，
+                        // 它已含圆形表盘的横向 padding，再叠加会把宽度扣两次导致缩窄）
                         modifier = Modifier.fillMaxWidth(),
                         icon = WearIcons.Delete,
                         enabled = !state.cacheBusy,
@@ -446,12 +471,12 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "遇到问题可反馈；上传日志后把日志号填进反馈，定位更快",
+                        text = "上传日志后把日志号填进反馈，定位更快",
                         modifier = Modifier.fillMaxWidth(),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
-                        maxLines = 3,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -467,7 +492,41 @@ fun SettingsScreen(
                     modifier = modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 长按「腕邮 WearMail」= 开发测试用的「一键导出当前配置」入口
+                    Row(
+                        modifier = Modifier.combinedClickable(
+                            onClick = {},
+                            onLongClick = {
+                                haptics.tick()
+                                scope.launch {
+                                    val exported = ConfigExporter.export(
+                                        context = container.app,
+                                        accounts = container.accounts.load(),
+                                        settings = state.settings,
+                                    )
+                                    message = exported.fold(
+                                        onSuccess = { file -> "已导出到 文档/exports/${file.name}" },
+                                        onFailure = { error -> "导出失败：${error.message ?: "未知错误"}" },
+                                    )
+                                }
+                            },
+                            // 双击：读取文档目录里最新的配置文件并自动导入
+                            onDoubleClick = {
+                                haptics.tick()
+                                scope.launch {
+                                    val imported = ConfigImporter.import(context = container.app, container = container)
+                                    message = imported.fold(
+                                        onSuccess = { summary ->
+                                            "已导入：新增 ${summary.accountsAdded} 个账户、更新 ${summary.accountsUpdated} 个" +
+                                                if (summary.settingsApplied) "，设置已恢复" else ""
+                                        },
+                                        onFailure = { error -> "导入失败：${error.message ?: "无配置文件"}" },
+                                    )
+                                }
+                            },
+                        ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Icon(
                             imageVector = WearIcons.Mail,
                             contentDescription = null,

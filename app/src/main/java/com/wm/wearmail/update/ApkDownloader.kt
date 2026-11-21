@@ -64,6 +64,13 @@ object DownloadUrls {
     /** 加速前缀（需求指定） */
     const val PROXY_PREFIX = "https://gh-proxy.com/"
 
+    /**
+     * 官方 CDN 镜像：**第一优先级**下载源（国内访问稳定）。
+     *
+     * 只有这里连不上/下载失败时才回退 GitHub 直连与 gh-proxy 加速（见 [candidates]）。
+     */
+    const val PRIMARY_MIRROR = "https://wearmail.cn-nb2.rains3.com/wearmail-release.apk"
+
     /** 是否属于可加速的 GitHub 链接（asset 会 302 到 objects.githubusercontent.com） */
     fun isAccelerable(url: String): Boolean =
         url.startsWith("https://github.com/") ||
@@ -71,10 +78,20 @@ object DownloadUrls {
             url.startsWith("https://release-assets.githubusercontent.com/")
 
     /**
-     * 候选下载地址：第一个直连；若可加速则追加代理链接作为第二个候选。
+     * 候选下载地址，按优先级：
+     * 1. **官方镜像**（[PRIMARY_MIRROR]）——国内最稳；
+     * 2. GitHub 原始地址（直连）；
+     * 3. gh-proxy 加速（仅 GitHub 链接）。
      */
-    fun candidates(url: String): List<String> =
-        if (isAccelerable(url)) listOf(url, PROXY_PREFIX + url) else listOf(url)
+    fun candidates(url: String): List<String> {
+        val list = mutableListOf(PRIMARY_MIRROR)
+        if (url.isNotBlank() && url !in list) list += url
+        if (isAccelerable(url)) {
+            val proxied = PROXY_PREFIX + url
+            if (proxied !in list) list += proxied
+        }
+        return list
+    }
 }
 
 /**
@@ -129,7 +146,7 @@ class HttpApkDownloader : ApkDownloader {
     ): DownloadResult = withContext(Dispatchers.IO) {
         val candidates = DownloadUrls.candidates(url)
         for ((index, candidate) in candidates.withIndex()) {
-            val viaProxy = index > 0
+            val viaProxy = candidate.startsWith(DownloadUrls.PROXY_PREFIX)
             val ok = try {
                 downloadFrom(candidate, target, viaProxy, onProgress)
             } catch (t: CancellationException) {

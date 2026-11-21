@@ -25,6 +25,7 @@ import com.wm.wearmail.ui.screen.detail.EmailDetailScreen
 import com.wm.wearmail.ui.screen.inbox.InboxScreen
 import com.wm.wearmail.ui.kit.UpdateAvailableDialog
 import com.wm.wearmail.ui.screen.feedback.FeedbackCenterScreen
+import com.wm.wearmail.ui.screen.junk.JunkMailScreen
 import com.wm.wearmail.ui.screen.settings.OAuth2ConfigScreen
 import com.wm.wearmail.ui.screen.settings.SettingsScreen
 import androidx.wear.compose.material3.MaterialTheme
@@ -48,8 +49,8 @@ enum class TopLevelPage(val title: String) {
  * 覆盖层页面（全屏盖在分页之上，由返回键或页面内返回按钮关闭）。
  */
 sealed interface OverlayRoute {
-    /** 邮件详情 */
-    data class Detail(val emailId: Long) : OverlayRoute
+    /** 邮件详情；[isJunk] 为 true 表示从垃圾邮件箱打开（默认不加载图片/链接） */
+    data class Detail(val emailId: Long, val isJunk: Boolean = false) : OverlayRoute
 
     /** 撰写邮件（可携带回复预填或草稿 id） */
     data class Compose(
@@ -66,6 +67,9 @@ sealed interface OverlayRoute {
 
     /** 反馈中心（GitHub / 表单二维码 / 上传日志） */
     data object Feedback : OverlayRoute
+
+    /** 垃圾邮件箱（所有账户合并） */
+    data object Junk : OverlayRoute
 }
 
 /**
@@ -144,6 +148,7 @@ fun WearMailApp(
                     active = isActive,
                     rotaryBus = rotaryBus,
                     onAddAccount = { overlay = OverlayRoute.AddAccount },
+                    onOpenJunk = { overlay = OverlayRoute.Junk },
                     onBack = {
                         scope.launch { pagerState.animateScrollToPage(TopLevelPage.INBOX.ordinal) }
                     },
@@ -187,6 +192,7 @@ fun WearMailApp(
             is OverlayRoute.Detail -> EmailDetailScreen(
                 container = container,
                 emailId = route.emailId,
+                isJunk = route.isJunk,
                 onBack = { overlay = null },
                 onReply = { to, subject ->
                     overlay = OverlayRoute.Compose(prefillTo = to, prefillSubject = subject)
@@ -217,6 +223,12 @@ fun WearMailApp(
             OverlayRoute.Feedback -> FeedbackCenterScreen(
                 container = container,
                 onBack = { overlay = null },
+            )
+
+            OverlayRoute.Junk -> JunkMailScreen(
+                container = container,
+                onBack = { overlay = null },
+                onOpenMail = { emailId -> overlay = OverlayRoute.Detail(emailId, isJunk = true) },
             )
         }
     }

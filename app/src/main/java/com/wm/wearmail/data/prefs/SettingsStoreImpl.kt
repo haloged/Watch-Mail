@@ -81,6 +81,7 @@ class SettingsStoreImpl(context: Context) : SettingsStore {
             htmlRenderingEnabled = prefs.getBoolean(KEY_HTML_RENDER, defaults.htmlRenderingEnabled),
             remoteImagesEnabled = prefs.getBoolean(KEY_REMOTE_IMAGES, defaults.remoteImagesEnabled),
             openLinksInBrowser = prefs.getBoolean(KEY_OPEN_LINKS, defaults.openLinksInBrowser),
+            junkMailMediaEnabled = prefs.getBoolean(KEY_JUNK_MEDIA, defaults.junkMailMediaEnabled),
         )
     }
 
@@ -99,6 +100,7 @@ class SettingsStoreImpl(context: Context) : SettingsStore {
             .putBoolean(KEY_HTML_RENDER, settings.htmlRenderingEnabled)
             .putBoolean(KEY_REMOTE_IMAGES, settings.remoteImagesEnabled)
             .putBoolean(KEY_OPEN_LINKS, settings.openLinksInBrowser)
+            .putBoolean(KEY_JUNK_MEDIA, settings.junkMailMediaEnabled)
             .apply()
     }
 
@@ -124,6 +126,7 @@ class SettingsStoreImpl(context: Context) : SettingsStore {
         private const val KEY_HTML_RENDER = "html_rendering_enabled"
         private const val KEY_REMOTE_IMAGES = "remote_images_enabled"
         private const val KEY_OPEN_LINKS = "open_links_in_browser"
+        private const val KEY_JUNK_MEDIA = "junk_mail_media_enabled"
 
         /** 被关闭通知的账户 id 集合（存字符串，Long 无 StringSet 支持） */
         private const val KEY_NOTIF_DISABLED_ACCOUNTS = "notif_disabled_accounts"

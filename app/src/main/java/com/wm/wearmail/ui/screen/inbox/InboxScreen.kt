@@ -56,6 +56,7 @@ import com.wm.wearmail.ui.kit.AccountInitialBadge
 import com.wm.wearmail.ui.kit.CircularItem
 import com.wm.wearmail.ui.kit.CircularSafeLazyColumn
 import com.wm.wearmail.ui.kit.CircularScreen
+import com.wm.wearmail.ui.kit.SettingsActionRow
 import com.wm.wearmail.ui.kit.ConfirmDialog
 import com.wm.wearmail.ui.kit.EmptyState
 import com.wm.wearmail.ui.kit.ErrorBanner
@@ -527,7 +528,7 @@ private fun StatusBar(
  * - 长按：弹出操作菜单（标记已读/未读、标星/取消星标、删除需二次确认）。
  */
 @Composable
-private fun MailRow(
+internal fun MailRow(
     mail: EmailMeta,
     colorIndex: Int,
     modifier: Modifier = Modifier,
@@ -535,6 +536,8 @@ private fun MailRow(
     onMarkRead: (Boolean) -> Unit,
     onSetFlagged: (Boolean) -> Unit,
     onDelete: () -> Unit,
+    /** 是否允许长按操作菜单（垃圾邮件箱传 false：只读浏览，避免误改状态） */
+    menuEnabled: Boolean = true,
 ) {
     val haptics = rememberHaptics()
     var menuVisible by remember(mail.id) { mutableStateOf(false) }
@@ -560,9 +563,13 @@ private fun MailRow(
             haptics.tick()
             onOpen()
         },
-        onLongClick = {
-            haptics.longPress()
-            menuVisible = true
+        onLongClick = if (menuEnabled) {
+            {
+                haptics.longPress()
+                menuVisible = true
+            }
+        } else {
+            null
         },
         onLongClickLabel = "邮件操作",
         modifier = modifier.heightIn(min = 48.dp),

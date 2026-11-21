@@ -74,6 +74,13 @@ data class AppSettings(
      * 其余协议（mailto:、tel: 等）一律忽略，WebView 自身也绝不导航。
      */
     val openLinksInBrowser: Boolean = false,
+    /**
+     * 垃圾邮件箱是否允许加载远程图片与打开链接（**默认关闭**）。
+     *
+     * 垃圾邮件的图片/链接是钓鱼与追踪的主要载体，默认一律屏蔽；
+     * 只有用户显式打开后，垃圾邮件详情才按普通邮件的规则处理（仍受上面两个全局开关约束）。
+     */
+    val junkMailMediaEnabled: Boolean = false,
 ) {
     /** 后台间隔必须落在系统允许的 15 分钟以上 */
     val normalizedBackgroundMinutes: Int

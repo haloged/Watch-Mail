@@ -26,8 +26,8 @@ android {
         minSdk = 30
         targetSdk = 35
         // 与手表端版本同步（用户要求「手机应用版本和手表同步」）
-        versionCode = 6
-        versionName = "1.2.4"
+        versionCode = 7
+        versionName = "1.2.5"
     }
 
     // 签名配置（可选，与手表端同一套证书）：见 app/build.gradle.kts 的说明

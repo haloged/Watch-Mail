@@ -76,11 +76,15 @@ python tools/test_summary.py
 | `LogTextTest` | 4 | 日志落盘文本：单行格式（时间/级别/标签）、换行与制表符转义、超长截断、按本地时区生成当天文件名 | 反馈中心（上传日志内容） |
 | `FeedbackLogIdTest` | 3 | 日志号格式 `MMdd-HHmm-XXX`（**13 字符**，手表圆屏单行可完整显示）、随机序号夹紧、维格表创建记录 JSON（字段 ID 与附件结构 token/name/size/mimeType） | 反馈中心（上传日志） |
 | `UploadQuotaPolicyTest` | 8 | 上传风控：首次允许、1 分钟内拒绝（含剩余等待）、恰好满 1 分钟允许、每天 5 次上限、跨天重置（间隔仍生效）、同天累加、时钟回拨不卡死、日期键按本地时区 | 反馈中心（上传日志风控） |
-| **合计** | **309**（另有 phone 模块 `PhoneSyncTest` 7 例） | | |
+| `MailErrorMappingTest` | 5 | 异常→MailError 映射：Outlook 的 `User is authenticated but not connected.` 必须翻译成「启用 IMAP / 重新授权」的可操作提示（含大小写变体），普通认证失败保留原文 | 添加账户验证 / 同步错误提示 |
+| `ConfigExporterTest` | 3 | 配置导出（开发测试）：账户服务器参数完整、**绝不包含凭据**（password/token/oauth 字段）、客户端 ID 只导出是否配置、时间戳格式 | 长按「关于」导出配置 |
+| `ConfigImporterTest` | 3 | 配置导入：导出 JSON 能完整解析回账户与设置（字段闭环）、缺省字段为 null（不覆盖用户现值）、缺少 email 的账户被忽略 | 双击「关于」导入 |
+| `JunkFolderDetectionTest` | 3 | 垃圾文件夹识别：SPECIAL-USE（`\Junk`/`\Spam`）优先、按名称（Junk/Spam/垃圾邮件/广告邮件）、普通文件夹不误判 | 垃圾邮件箱 |
+| **合计** | **325**（另有 phone 模块 `PhoneSyncTest` 7 例） | | |
 
 ## 4. 静态检查
 
-`tools/static_checks.py` 的检查项与失败含义（**28 项全部通过**）：
+`tools/static_checks.py` 的检查项与失败含义（**30 项全部通过**）：
 
 | 检查 | 失败含义 |
 |------|---------|
@@ -110,6 +114,8 @@ python tools/test_summary.py
 | **IMAP 客户端身份（RFC 2971）** | `ImapClientImpl` 未在连接后发送 IMAP ID，或只在普通连接发送、IDLE 重连时漏发（**网易 163/126 会拒绝收信：Unsafe Login**）；手机模块复制的实现同样必须包含 |
 | **OAuth2 短码完整显示** | 短码回到固定字号或在窄屏（438×438）被裁切——微软 9 位短码只显示 8 位，用户无法完成授权；断言 `OAuthCodeLayout.fontSizeSp` 被使用且短码单行不换行 |
 | **反馈中心（含日志上传）** | 设置页缺少「反馈中心」入口；GitHub/飞书链接缺失；二维码弹窗缺少「在手表打开」（ACTION_VIEW）；日志未落盘（`Logs` 不调 `LogFileWriter`，上传日志为空）；上传未按字段 ID 写入（`fieldKey=id`，用户给的是 fieldId）；上传成功后不显示日志号；**上传风控失效**（未接入 `FeedbackQuota`：一分钟一次 / 每天五次）；问卷链接不是最新的维格表分享页 |
+| **配置导出（开发测试）** | 设置页「关于」的腕邮文字失去长按（`combinedClickable`+`onLongClick`）；导出实现写入凭据（password/token 字段）——这是**安全红线** |
+| **垃圾邮件箱（风险默认）** | 收件箱底部入口缺失；垃圾页无风险提示（钓鱼/恶意）；详情页对垃圾邮件未默认屏蔽图片/链接（`isJunk`+`junkMailMediaEnabled`）；设置页缺开关 |
 | Kotlin 括号配平 | 明显的语法破损 |
 | 每个 Kotlin 文件声明包名 | 文件头缺失 `package`，构建失败 |
 
@@ -267,6 +273,7 @@ Material Icons 1.7.7 的 deprecation），不影响功能。
 | 5（P1） | **预设自动回填会覆盖用户选好的加密方式** | `AddAccountViewModel.applyDetectedPresetIfEmpty` 对主机/端口「只在为空时填」，对加密方式却无条件覆盖 | 主机/端口/加密方式视为配套三元组：只有对应主机为空时才整组回填 |
 | 6（P0） | **网易邮箱（163/126）完全无法同步（Unsafe Login）** | 网易为账号安全要求客户端在 IMAP 登录后发送 RFC 2971 的 `ID` 声明身份；`ImapClientImpl` 此前未发送 → 网易直接拒绝收信，真机表现为「同步一直失败」 | 新增 `sendImapId()`，在**普通连接与 IDLE 重连**后调用 `IMAPStore.id(name/version/vendor)`；不支持 ID 命令的服务器忽略失败（不影响其他服务商）。静态检查「IMAP 客户端身份」覆盖手表端与手机端（已用缺陷版本验证规则会 FAIL） |
 | 7（P1） | **438×438 圆屏上 OAuth2 短码只显示 8 位** | 短码用固定 `titleLarge`（22sp）+ 2sp 字距 + `maxLines=1`，438 屏弦长收窄后宽度不足 → 微软 9 位短码被裁切，用户无法完成授权（真机反馈） | 新增纯函数 `OAuthCodeLayout.fontSizeSp`（按可用宽度 ÷ 字符数反推字号，14–26sp 自适应）+ `BoxWithConstraints` 取实际宽度 + 单行不换行；`OAuthCodeLayoutTest`（5 例）+ 静态检查「OAuth2 短码完整显示」（已用缺陷版本验证规则会 FAIL） |
+| 8（P0） | **Outlook OAuth2 账户添加后无法收信（No login methods / authenticated but not connected）** | `AddAccountViewModel.verify()` 与 `probe()` 固定用 `AccountSecrets(password = ...)` —— OAuth2 流程下走「密码」分支，JavaMail 不启用 XOAUTH2 → 服务器宣告的机制里无可用项 → `No login methods supported!`；同步阶段虽走 XOAUTH2，但账号侧 IMAP 被拒时提示误导（真机日志分析发现） | 新增 `currentSecrets()`（有令牌用 `AccountSecrets(oauth)`），verify/probe 统一使用；`MailError` 识别 `authenticated but not connected` 并提示「启用 IMAP / 重新授权」；**`userMessage` 的 Auth 分支改为优先展示具体原因**（此前固定文案会把指引吞掉，真机二次反馈）；静态检查断言（必须出现 `AccountSecrets(oauth = it)`，已用缺陷版本验证规则会 FAIL） |
 
 连带修复（与 #1 同一路径）：`OAuthTokenService.freshSecrets` 对「手机扫码粘贴令牌」的
 OAuth2 账户（令牌存在密码列）一律报「尚未完成授权」，现改为放行密码非空的情况。
@@ -298,7 +305,7 @@ OAuth2 账户（令牌存在密码列）一律报「尚未完成授权」，现�
 python tools/static_checks.py
 ```
 
-静态检查结果：**28 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
+静态检查结果：**30 项全部通过**（XML 结构、资源引用、20 个契约点、日志不泄漏敏感值、
 统一日志门面、无 `System.out`、加解密不依赖 `android.util.Base64`、
 **AES-GCM 与 Android Keystore 兼容**、**圆屏纵向预算**、**覆盖层不透明且拦截指针**、
 **账户密文列写入语义（SecretWrite）**、**正文 HTML 缓存三态语义**、
@@ -511,5 +518,27 @@ python tools/static_checks.py
     - **风控**：连续点两次（间隔 < 1 分钟）应提示「上传太频繁：请 N 秒后再试」；
       副标题显示「今天还可上传 N 次」，第 5 次后按钮置灰并提示「今天的上传次数已用完」；
     - 「填写表单反馈」的二维码应指向 `vika.cn/share/shrqKZoCV3CGi7fMfHP6P`；
-      在维格表反馈表中应出现一行：日志号 + 当天日志附件（内容与 `filesDir/logs/` 一致）；
-    - 无日志时点击应提示「今天还没有日志…」而不是静默失败。
+
+47. **Outlook OAuth2 账户验证与收信**（v1.2.4 修复）：添加 Outlook 账户并完成设备码授权后：
+    - 「验证连接」应通过（不应出现 `No login methods supported!`）；
+    - 若仍失败并提示「Outlook 拒绝 IMAP 登录」，按提示在 Outlook 网页版启用 IMAP，
+      或确认企业租户管理员未禁用 IMAP，然后重新授权；
+    - 首次同步应能拉到收件箱（此前会因验证走空密码而必然失败）。
+
+48. **垃圾邮件箱**（账号管理页底部「垃圾邮件箱」入口）：
+    - 进入后应先看到固定风险提示（钓鱼/恶意内容），并说明默认不加载图片/链接；
+    - 应列出**所有账户**垃圾文件夹里的最近邮件（各 15 封），**行样式与收件箱一致**（最前面有账户色点，长按不弹操作菜单）；
+    - 点开任一封：**不应加载远程图片、点击链接不应跳转**（即使全局「显示远程图片/打开链接」已开）；
+    - 在「设置 → 邮件正文 → 垃圾邮件加载图片与链接」打开后，再开同一封才允许按全局规则加载；
+    - 垃圾邮件**不应出现在统一收件箱**里，**也不计入未读角标/通知**（未读统计只算 INBOX）。
+
+49. **一键导出配置（开发测试）**：设置 →「关于」→ **长按**「腕邮 WearMail」文字：
+    - 应提示「配置已导出：exports/wearmail-config-…json」；
+    - 文件位于**文档目录**：`Android/data/com.wm.wearmail/files/Documents/exports/`；
+    - 内容包含账户服务器参数与开关项，**不得包含密码/授权码/OAuth 令牌**；
+    - **双击**同一处「腕邮 WearMail」文字：应提示「已导入：新增/更新 N 个账户…」，账户与设置随之恢复
+      （新导入的账户**需要重新填密码/授权**；已存在的账户保留原凭据）。
+
+51. **检查更新下载源**：断开 GitHub 访问（或直接观察日志）后点「检查更新 → 下载」：
+    - 应**优先**请求 `https://wearmail.cn-nb2.rains3.com/wearmail-release.apk`；
+    - 该源不可用时才回退 GitHub 直连与 `gh-proxy.com`。

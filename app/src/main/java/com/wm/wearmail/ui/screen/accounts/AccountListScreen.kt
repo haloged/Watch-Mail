@@ -46,6 +46,8 @@ import com.wm.wearmail.ui.kit.EmptyState
 import com.wm.wearmail.ui.kit.ErrorBanner
 import com.wm.wearmail.ui.kit.LoadingIndicator
 import com.wm.wearmail.ui.kit.PrimaryActionButton
+import com.wm.wearmail.ui.kit.SecondaryActionButton
+import com.wm.wearmail.ui.kit.SettingsActionRow
 import com.wm.wearmail.ui.kit.WearIcons
 import com.wm.wearmail.ui.kit.WearTextField
 import com.wm.wearmail.ui.kit.rememberHaptics
@@ -72,6 +74,7 @@ fun AccountListScreen(
     active: Boolean,
     rotaryBus: RotaryBus,
     onAddAccount: () -> Unit,
+    onOpenJunk: () -> Unit,
     onBack: () -> Unit,
 ) {
     val vm: AccountListViewModel = viewModel(factory = AccountListViewModel.factory(container))
@@ -202,6 +205,19 @@ fun AccountListScreen(
                         },
                     )
                 }
+            }
+
+            // ---------------- 垃圾邮件箱入口（用户要求放在账号管理页底部） ----------------
+            circularSlot(index++, listState, key = "junk-entry") { rowModifier ->
+                SecondaryActionButton(
+                    text = "垃圾邮件箱",
+                    onClick = {
+                        haptics.tick()
+                        onOpenJunk()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = WearIcons.Warning,
+                )
             }
 
             // ---------------- 底部主按钮 ----------------

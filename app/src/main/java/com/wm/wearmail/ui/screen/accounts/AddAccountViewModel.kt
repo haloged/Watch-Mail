@@ -464,7 +464,7 @@ class AddAccountViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val result = runCatching {
                 // 只把密码交给探测层，绝不写入日志
-                container.probe.probe(state.email.trim(), AccountSecrets(password = _password.value))
+                container.probe.probe(state.email.trim(), currentSecrets())
             }
             result.fold(
                 onSuccess = { probeResult ->
@@ -507,6 +507,17 @@ class AddAccountViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /**
+     * 当前认证方式对应的凭据。
+     *
+     * **关键**：OAuth2 账户必须先走 xoauth2（令牌），不能用空密码走 APP_PASSWORD ——
+     * 否则 JavaMail 不会启用 XOAUTH2，Outlook 会返回
+     * `No login methods supported!`（真机日志分析的直接原因）。
+     */
+    private fun currentSecrets(): AccountSecrets =
+        oauthTokens?.let { AccountSecrets(oauth = it) }
+            ?: AccountSecrets(password = _password.value)
+
     /** 验证当前配置能否真正登录（IMAP 与 SMTP 都要通过） */
     fun verify() {
         val state = _uiState.value
@@ -515,7 +526,7 @@ class AddAccountViewModel(private val container: AppContainer) : ViewModel() {
             _uiState.update { it.copy(verifying = true, verifyMessage = null, verifySuccess = false, error = null) }
             viewModelScope.launch {
                 val result = runCatching {
-                    container.probe.verify(config, state.email.trim(), AccountSecrets(password = _password.value))
+                    container.probe.verify(config, state.email.trim(), currentSecrets())
                 }
                 result.fold(
                     onSuccess = { verifyResult ->

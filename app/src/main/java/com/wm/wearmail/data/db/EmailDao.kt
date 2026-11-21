@@ -89,12 +89,41 @@ class EmailDao(private val db: MailDatabase) {
         }
     }
 
-    /** 未读数：accountId 为 null 时为全部账户之和 */
+    /**
+     * 查询某账户某文件夹的邮件（垃圾邮件箱用；按时间倒序）。
+     *
+     * 与 [queryInbox] 的区别只是 folder 由调用方指定 —— 收件箱固定 INBOX，
+     * 因此垃圾邮件入库后**不会混入统一收件箱**。
+     */
+    fun queryByFolder(accountId: Long, folder: String, limit: Int): List<EmailMeta> {
+        val selection = "${EmailsTable.FOLDER} = ? AND ${EmailsTable.ACCOUNT_ID} = ?"
+        val args = arrayOf(folder, accountId.toString())
+        return db.read { d ->
+            d.query(
+                EmailsTable.NAME,
+                PROJECTION,
+                selection,
+                args,
+                null,
+                null,
+                "${EmailsTable.DATE_MILLIS} DESC, ${EmailsTable.ID} DESC",
+                limit.coerceAtLeast(1).toString(),
+            ).use { c -> c.mapRows(::mapEmail) }
+        }
+    }
+
+    /**
+     * 未读数：accountId 为 null 时为全部账户之和。
+     *
+     * **只统计收件箱**（folder = 'INBOX'）：垃圾邮件箱拉取的邮件也会入库
+     * （仅用于详情页复用），但绝不能计入未读角标（真机反馈）。
+     */
     fun unreadCount(accountId: Long?): Int {
         val sql = StringBuilder(
-            "SELECT COUNT(*) FROM ${EmailsTable.NAME} WHERE ${EmailsTable.IS_READ} = 0",
+            "SELECT COUNT(*) FROM ${EmailsTable.NAME} WHERE ${EmailsTable.IS_READ} = 0" +
+                " AND ${EmailsTable.FOLDER} = ?",
         )
-        val args = mutableListOf<String>()
+        val args = mutableListOf(INBOX)
         if (accountId != null) {
             sql.append(" AND ${EmailsTable.ACCOUNT_ID} = ?")
             args.add(accountId.toString())

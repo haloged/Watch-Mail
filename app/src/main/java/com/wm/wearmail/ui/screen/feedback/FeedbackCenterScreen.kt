@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material3.AlertDialog
+import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.IconButton
 import androidx.wear.compose.material3.MaterialTheme
@@ -47,6 +48,7 @@ import com.wm.wearmail.ui.screen.accounts.OAuthCodeLayout
 import com.wm.wearmail.ui.kit.CircularItem
 import com.wm.wearmail.ui.kit.CircularSafeLazyColumn
 import com.wm.wearmail.ui.kit.CircularScreen
+import com.wm.wearmail.ui.kit.SecondaryActionButton
 import com.wm.wearmail.ui.kit.SettingsActionRow
 import com.wm.wearmail.ui.kit.ToastHost
 import com.wm.wearmail.ui.kit.WearIcons
@@ -133,62 +135,38 @@ fun FeedbackCenterScreen(
 
             // ---------------- ① GitHub 反馈 ----------------
             feedbackSlot(index++, listState) { modifier ->
-                SettingsActionRow(
+                SecondaryActionButton(
+                    text = "前往 GitHub 反馈",
                     onClick = {
                         haptics.tick()
                         qrLink = FeedbackLink.GITHUB
                     },
-                    modifier = modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     icon = WearIcons.Send,
-                    label = {
-                        Text(
-                            text = "前往 GitHub 反馈",
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                        )
-                    },
-                    secondaryLabel = {
-                        Text(
-                            text = "可能会遇到网络问题，但解决更快",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                        )
-                    },
                 )
             }
 
             // ---------------- ② 表单反馈 ----------------
             feedbackSlot(index++, listState) { modifier ->
-                SettingsActionRow(
+                SecondaryActionButton(
+                    text = "填写表单反馈",
                     onClick = {
                         haptics.tick()
                         qrLink = FeedbackLink.FORM
                     },
-                    modifier = modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     icon = WearIcons.Edit,
-                    label = {
-                        Text(
-                            text = "填写表单反馈",
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                        )
-                    },
-                    secondaryLabel = {
-                        Text(
-                            text = "解决更慢，大约两个版本内集中解决",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                        )
-                    },
                 )
             }
 
             // ---------------- ③ 上传日志 ----------------
             feedbackSlot(index++, listState) { modifier ->
                 Column(modifier = modifier.fillMaxWidth()) {
-                    SettingsActionRow(
+                    SecondaryActionButton(
+                        text = "上传日志",
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = WearIcons.Refresh,
+                        enabled = !uploading && remainingToday > 0,
                         onClick = {
                             haptics.tick()
                             // 风控：1 分钟内只能上传一次、每天 5 次（按尝试计数，失败重试同样计入）
@@ -222,28 +200,6 @@ fun FeedbackCenterScreen(
                                     }
                                 }
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !uploading && remainingToday > 0,
-                        icon = WearIcons.Refresh,
-                        label = {
-                            Text(
-                                text = if (uploading) "上传中…" else "上传日志",
-                                style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
-                            )
-                        },
-                        secondaryLabel = {
-                            Text(
-                                text = if (remainingToday > 0) {
-                                    "只上传今天的日志 · 今天还可上传 $remainingToday 次"
-                                } else {
-                                    "今天的上传次数已用完（每天 ${UploadQuotaPolicy.MAX_UPLOADS_PER_DAY} 次）"
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                            )
                         },
                     )
                     uploadedLogId?.let { logId ->
@@ -345,7 +301,8 @@ private fun FeedbackQrDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            // 用标准 Button（而非 TextButton）：与其它页面的操作按钮观感一致
+            Button(onClick = {
                 // 多数手表没有浏览器：打开失败时提示改用手机扫码
                 val opened = runCatching {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url)))

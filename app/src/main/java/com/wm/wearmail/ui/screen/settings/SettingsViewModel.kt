@@ -314,6 +314,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** 开关「显示远程图片」（仅在 HTML 渲染开启时有意义） */
+    /** 垃圾邮件是否允许加载图片与打开链接（默认关闭，防钓鱼/追踪） */
+    fun setJunkMailMedia(enabled: Boolean) {
+        viewModelScope.launch {
+            container.settings.update { it.copy(junkMailMediaEnabled = enabled) }
+        }
+    }
+
     fun setRemoteImages(enabled: Boolean) {
         viewModelScope.launch {
             val ok = runCatching {

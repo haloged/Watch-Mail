@@ -34,6 +34,8 @@ data class RenderSettings(
     val htmlEnabled: Boolean,
     val remoteImagesEnabled: Boolean,
     val openLinksInBrowser: Boolean,
+    /** 垃圾邮件是否允许图片与链接（默认关闭） */
+    val junkMailMediaEnabled: Boolean,
 )
 
 /**
@@ -57,6 +59,8 @@ data class DetailUiState(
     val remoteImagesEnabled: Boolean = false,
     /** 设置：点击邮件内链接是否用浏览器打开（默认关闭，见 AppSettings.openLinksInBrowser） */
     val openLinksInBrowser: Boolean = false,
+    /** 设置：垃圾邮件是否允许加载图片与打开链接（默认关闭） */
+    val junkMailMediaEnabled: Boolean = false,
     val loadingBody: Boolean = false,
     val loadingMail: Boolean = true,
     val error: String? = null,
@@ -122,6 +126,7 @@ class EmailDetailViewModel(
                 htmlEnabled = it.htmlRenderingEnabled,
                 remoteImagesEnabled = it.remoteImagesEnabled,
                 openLinksInBrowser = it.openLinksInBrowser,
+                junkMailMediaEnabled = it.junkMailMediaEnabled,
             )
         }
 
@@ -208,6 +213,7 @@ class EmailDetailViewModel(
             htmlEnabled = rendering.htmlEnabled,
             remoteImagesEnabled = rendering.remoteImagesEnabled,
             openLinksInBrowser = rendering.openLinksInBrowser,
+            junkMailMediaEnabled = rendering.junkMailMediaEnabled,
             loadingBody = body is BodyState.Loading,
             loadingMail = !observed,
             error = (body as? BodyState.Failed)?.message,

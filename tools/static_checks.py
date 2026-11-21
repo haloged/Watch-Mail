@@ -1166,6 +1166,15 @@ def check_imap_identity(report: Report, root: Path) -> None:
         if '"name"' not in text or '"vendor"' not in text or '"version"' not in text:
             problems.append(f"[{label}] IMAP ID 字段不完整（name/version/vendor）")
 
+    # OAuth2 账户的验证必须用令牌（xoauth2），不能用空密码 → No login methods supported
+    view_model = root / "app/src/main/java/com/wm/wearmail/ui/screen/accounts/AddAccountViewModel.kt"
+    if view_model.exists():
+        text = strip_comments(view_model.read_text(encoding="utf-8", errors="ignore"))
+        if "AccountSecrets(oauth = it)" not in text:
+            problems.append(
+                "添加账户验证未按认证方式构造凭据（OAuth2 会走空密码 → No login methods supported）",
+            )
+
     report.check("IMAP 客户端身份（RFC 2971）", not problems, "; ".join(problems[:6]))
 
 
@@ -1253,6 +1262,104 @@ def check_feedback_center(report: Report, root: Path) -> None:
             problems.append("日志未落盘（上传日志会没有内容）")
 
     report.check("反馈中心（含日志上传）", not problems, "; ".join(problems[:6]))
+
+
+def check_config_export(report: Report, root: Path) -> None:
+    """
+    一键导出配置（开发测试功能，长按「关于」里的腕邮文字触发）。
+
+    防回归锚点：
+    - 设置页「关于」的腕邮文字必须绑定长按（`combinedClickable` + `onLongClick`）；
+    - 导出实现在 `ConfigExporter`，且**绝不写入凭据**（password/token/oauth 等字段）；
+    - 产物写应用私有目录 `exports/`。
+    """
+    problems: list[str] = []
+    java_root = root / "app/src/main/java/com/wm/wearmail"
+
+    exporter = java_root / "core/ConfigExporter.kt"
+    if not exporter.exists():
+        problems.append("缺少 ConfigExporter.kt（导出配置）")
+    else:
+        text = strip_comments(exporter.read_text(encoding="utf-8", errors="ignore"))
+        for needle in ('"password"', '"token"', '"oauthAccessToken"', "buildJson"):
+            if needle.startswith('"') and needle in text:
+                problems.append(f"配置导出中出现疑似凭据字段 {needle}（导出不得包含凭据）")
+        if "buildJson" not in text or "DIR_NAME" not in text:
+            problems.append("配置导出实现不完整（buildJson / 导出目录）")
+        if "Environment.DIRECTORY_DOCUMENTS" not in text:
+            problems.append("配置导出未写入「文档目录」（用户要求导出到 Documents）")
+
+    settings = java_root / "ui/screen/settings/SettingsScreen.kt"
+    if settings.exists():
+        text = strip_comments(settings.read_text(encoding="utf-8", errors="ignore"))
+        if "combinedClickable" not in text or "onLongClick" not in text:
+            problems.append("设置页「关于」长按导出入口缺失（combinedClickable/onLongClick）")
+        if "onDoubleClick" not in text or "ConfigImporter.import" not in text:
+            problems.append("设置页「关于」双击导入入口缺失（onDoubleClick/ConfigImporter）")
+
+    report.check("配置导出（开发测试）", not problems, "; ".join(problems[:6]))
+
+
+def check_junk_mailbox(report: Report, root: Path) -> None:
+    """
+    垃圾邮件箱（收件箱底部入口 → 所有账户合并，风险提示 + 图片/链接默认关闭）。
+
+    防回归锚点：
+    - 收件箱列表底部有「垃圾邮件箱」入口；
+    - 垃圾页固定展示风险提示（钓鱼/恶意）；
+    - 详情页对垃圾邮件默认屏蔽图片与链接（`isJunk` + `junkMailMediaEnabled`）；
+    - 设置页提供「垃圾邮件加载图片与链接」开关（默认关闭）。
+    """
+    problems: list[str] = []
+    java_root = root / "app/src/main/java/com/wm/wearmail"
+
+    accounts_screen = java_root / "ui/screen/accounts/AccountListScreen.kt"
+    if not accounts_screen.exists():
+        problems.append("缺少 AccountListScreen.kt")
+    else:
+        text = strip_comments(accounts_screen.read_text(encoding="utf-8", errors="ignore"))
+        if "垃圾邮件箱" not in text or "onOpenJunk" not in text:
+            problems.append("账号管理页缺少「垃圾邮件箱」入口（用户指定的位置）")
+
+    screen = java_root / "ui/screen/junk/JunkMailScreen.kt"
+    if not screen.exists():
+        problems.append("缺少 JunkMailScreen.kt（垃圾邮件箱页面）")
+    else:
+        text = strip_comments(screen.read_text(encoding="utf-8", errors="ignore"))
+        if "钓鱼" not in text and "恶意" not in text:
+            problems.append("垃圾邮件箱缺少风险提示（钓鱼/恶意内容）")
+
+    detail = java_root / "ui/screen/detail/EmailDetailScreen.kt"
+    if detail.exists():
+        text = strip_comments(detail.read_text(encoding="utf-8", errors="ignore"))
+        if "isJunk" not in text or "junkMailMediaEnabled" not in text:
+            problems.append("详情页未对垃圾邮件默认屏蔽图片/链接（isJunk 逻辑缺失）")
+
+    settings = java_root / "ui/screen/settings/SettingsScreen.kt"
+    if settings.exists():
+        text = strip_comments(settings.read_text(encoding="utf-8", errors="ignore"))
+        if "垃圾邮件加载图片与链接" not in text:
+            problems.append("设置页缺少「垃圾邮件加载图片与链接」开关")
+
+    vm = java_root / "ui/screen/junk/JunkMailViewModel.kt"
+    if vm.exists():
+        text = strip_comments(vm.read_text(encoding="utf-8", errors="ignore"))
+        if "isJunkFolder" not in text:
+            problems.append("垃圾邮件箱未识别垃圾文件夹（isJunkFolder）")
+
+    # 垃圾邮件入库后不得计入未读角标：unreadCount 必须限定收件箱
+    dao = java_root / "data/db/EmailDao.kt"
+    if dao.exists():
+        text = strip_comments(dao.read_text(encoding="utf-8", errors="ignore"))
+        idx = text.find("fun unreadCount(")
+        if idx < 0:
+            problems.append("缺少 unreadCount（未读统计）")
+        else:
+            body = text[idx:idx + 600]
+            if "EmailsTable.FOLDER" not in body:
+                problems.append("未读数未限定收件箱（垃圾邮件会被算成未读）")
+
+    report.check("垃圾邮件箱（风险默认）", not problems, "; ".join(problems[:6]))
 
 
 def check_oauth_code_layout(report: Report, root: Path) -> None:
@@ -1469,6 +1576,8 @@ def main() -> int:
     check_imap_identity(report, root)
     check_oauth_code_layout(report, root)
     check_feedback_center(report, root)
+    check_config_export(report, root)
+    check_junk_mailbox(report, root)
     check_kotlin_balance(report, root)
     check_package_declared(report, root)
 

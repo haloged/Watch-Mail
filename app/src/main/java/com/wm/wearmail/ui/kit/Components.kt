@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.FlowRowScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -77,10 +79,12 @@ import androidx.wear.compose.material3.AlertDialog
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Card
+import androidx.wear.compose.material3.CardDefaults
 import androidx.wear.compose.material3.CircularProgressIndicator
 import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
+import androidx.wear.compose.material3.SwitchButtonDefaults
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.TextButton
 import androidx.wear.compose.material3.TimeText
@@ -117,7 +121,7 @@ object WearIcons {
     /** 手机（用于「用手机扫码配置」入口，core 图标集无二维码图标） */
     val Phone: ImageVector = Icons.Filled.Phone
 
-    /** 下载（「下载手机版」入口） */
+        /** 下载（「下载手机版」入口） */
     val Download: ImageVector = ImageVector.Builder(
         name = "Download",
         defaultWidth = 24.dp,
@@ -689,9 +693,11 @@ fun SecondaryActionButton(
 /**
  * 设置风格的「动作行」：整行卡片 + 左图标 + 标题/副标题。
  *
- * 与设置页的 [androidx.wear.compose.material3.SwitchButton] 同一视觉（只是右侧没有开关），
- * 用于「点击执行动作」的入口，保证与开关类设置项的按钮风格一致
- * （反馈中心的三个按钮统一使用本组件）。
+ * **为什么不用 `Button`，也不用 `fillMaxWidth`**：
+ * Wear 的 `Button`/`CompactButton` 宽度来自内容，文本短就缩成一根竖条；
+ * 而 `fillMaxWidth` 在部分组合下仍会被内部测量覆盖（真机多次复现）。
+ * 这里先用 `BoxWithConstraints` 取到父级可用宽度，再用 **显式 `width(maxWidth)`** 建卡片——
+ * 宽度由布局约束直接决定，与文字长短、组件内部实现都无关，**不可能再缩**。
  */
 @Composable
 fun SettingsActionRow(
@@ -702,27 +708,36 @@ fun SettingsActionRow(
     label: @Composable () -> Unit,
     secondaryLabel: (@Composable () -> Unit)? = null,
 ) {
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        enabled = enabled,
-        icon = icon?.let { vector ->
-            {
-                Icon(
-                    imageVector = vector,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        Card(
+            onClick = onClick,
+            modifier = Modifier
+                .width(maxWidth)
+                .heightIn(min = 44.dp),
+            enabled = enabled,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            ),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    label()
+                    secondaryLabel?.invoke()
+                }
             }
-        },
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        Column {
-            label()
-            secondaryLabel?.invoke()
         }
     }
 }
